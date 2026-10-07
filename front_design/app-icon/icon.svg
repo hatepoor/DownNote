@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>低落日记 · 应用图标（256 母版）</title>
+  <!-- 与界面内窄栏印章同构：满饱和朱砂实心方 + 纸白「低」，宋体 600。
+       字号按图标惯例放大到字身约占方框 74%（界面内印章偏松，小尺寸会糊）。
+       16 / 24px 另走 icon-small.svg——大尺寸母版直接缩到 16px 会糊。 -->
+  <rect width="256" height="256" fill="#C2402A"/>
+  <text x="128" y="130" text-anchor="middle" dominant-baseline="central"
+        font-family="Noto Serif SC, Source Han Serif SC, SimSun, serif"
+        font-weight="600" font-size="190" fill="#FAF9F5">低</text>
+</svg>

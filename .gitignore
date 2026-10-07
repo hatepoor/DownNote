@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# 前端
+node_modules/
+frontend/dist/
+
+# PyInstaller 产物
+build/
+dist/
+
+# IDE / 系统
+.idea/
+.DS_Store
+.pytest_cache/
+
+# 密钥文件（永不入库；.env.example 是模板，可以提交）
+.env
+
+# 发布产物（不打进仓库；从 GitHub Releases 分发）
+/down_note-v*.zip
+
+# 工具本地目录（不提交）
+.zcode/
+.workbuddy/

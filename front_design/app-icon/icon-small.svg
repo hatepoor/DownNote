@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <title>低落日记 · 应用图标 · 16 / 24px 专用母版</title>
+  <!-- 16px 下「低」7 画必须靠真实字形才认得出：几何简化版实测被读成「介」（实测记录见 README）。
+       故小尺寸母版直接用字体渲染，并把字重由 600 提到 700 做光学补偿——笔画在 16px 才站得住。 -->
+  <rect width="16" height="16" fill="#C2402A"/>
+  <text x="8" y="8.4" text-anchor="middle" dominant-baseline="central"
+        font-family="Noto Serif SC, Source Han Serif SC, SimSun, serif"
+        font-weight="700" font-size="13.5" fill="#FAF9F5">低</text>
+</svg>

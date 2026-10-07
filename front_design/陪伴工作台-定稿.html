@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-motion="ink">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>低落日记 · 陪伴工作台（定稿 · 信笺铅字）</title>
+<!--
+  低落日记 前端定稿页面 · 对应 front_design/02-视觉规范.md（信笺铅字 · 轮次01 定稿）
+  浅色「信笺」默认；深色「夜笺」经 data-theme="dark" 切换（与 Vue 实现同机制：CSS 变量 + data-theme）
+  动效两档经 data-motion="static|ink" 切换（默认「墨」）；档位开关仅为本参考稿的演示控件，不进产品设置。
+
+  纪律：宋体主导 · 无卡片规则线 · 方角 2px（浮层 4px）· 常态零阴影 · 朱砂全站唯一暖色 · 铅字框情绪标签 · 等宽时间戳
+ 　　　纸上不会飘——除抽屉「抽纸」外，入场一律不用位移
+  本轮（02 修订）新增：纸纹工艺 · 对比度锚点提升（hairline/ink-3）· 动效「纸与墨」
+  书写区为纯留白（轮次02 试做的稿纸横格线经评审后移除，理由见 02 §3.5）
+  演示控件不属产品界面：其激活态用墨色而非朱砂，避免污染画面的朱砂用量判断。
+
+  本文件自包含（无外部依赖），仅作定稿视觉参考与实现基准；窄栏中部可切换 信笺/夜笺 与 动效档位。
+-->
+<style>
+/* ============ Token · 信笺（浅，默认） ============ */
+:root{
+  --bg-page:#FAF9F5; --bg-surface:#FAF9F5; --bg-inset:#F1EFE9;
+  --ink-1:#1C1B18; --ink-2:#6E6A61; --ink-3:#94908A;
+  --hairline:#CEC7B6; --hairline-strong:#B5AC97;
+  --accent:#C2402A; --accent-hover:#A83422; --accent-soft:#F5EAE4; --on-accent:#FAF9F5;
+  --ok:#52705E; --banner-bg:#F1EFE9; --banner-ink:#6E6A61;
+  --focus-ring:rgba(194,64,42,.4);
+  --mood-low:#4A5A6B; --mood-anx:#7A6234; --mood-anger:#8C4A3E; --mood-wronged:#8A5F66;
+  --mood-tired:#5E5570; --mood-calm:#52705E; --mood-hope:#5E7550; --mood-lonely:#56616E; --mood-neutral:#63605A;
+  --grain-op:.85; --grain-blend:multiply;
+  --serif:"Noto Serif SC","Source Han Serif SC","SimSun",serif;
+  --sans:"Noto Sans SC","Source Han Sans SC","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  --mono:"Cascadia Mono","Consolas",monospace;
+}
+/* ============ Token · 夜笺（深） ============ */
+[data-theme="dark"]{
+  --bg-page:#1C1B18; --bg-surface:#232220; --bg-inset:#171614;
+  --ink-1:#EDEAE2; --ink-2:#A8A499; --ink-3:#6E6A61;
+  --hairline:#423F38; --hairline-strong:#55514A;
+  --accent:#D24A32; --accent-hover:#E05A40; --accent-soft:#3A231D; --on-accent:#FAF9F5;
+  --ok:#8FB09C; --banner-bg:#26241F; --banner-ink:#A8A499;
+  --focus-ring:rgba(210,74,50,.45);
+  --mood-low:#A9BDCD; --mood-anx:#D2B585; --mood-anger:#CC8A7E; --mood-wronged:#C79CA1;
+  --mood-tired:#AB9FBA; --mood-calm:#9BB8A2; --mood-hope:#A8C294; --mood-lonely:#A6B0BF; --mood-neutral:#A39D90;
+  --grain-op:.80; --grain-blend:screen;
+}
+/* ============ 基础 ============ */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg-page);color:var(--ink-1);font-family:var(--sans);font-size:14px;overflow:hidden}
+button{font-family:inherit;cursor:pointer;background:none;border:none;color:inherit}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+[hidden]{display:none!important}
+/* 纸纹：整屏一张纸的物理颗粒（衬在产品内容之上，与浮层同属纸面） */
+.grain{position:fixed;inset:0;z-index:90;pointer-events:none;
+  opacity:var(--grain-op);mix-blend-mode:var(--grain-blend);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='.12'/%3E%3C/svg%3E")}
+/* ============ 骨架 ============ */
+.app{display:flex;height:100vh}
+.rail{width:64px;flex:none;background:var(--bg-inset);border-right:1px solid var(--hairline);
+  display:flex;flex-direction:column;align-items:center;padding:26px 0 20px;overflow:hidden}
+.seal{width:34px;height:34px;background:var(--accent);color:var(--on-accent);font-family:var(--serif);
+  font-weight:600;font-size:19px;display:flex;align-items:center;justify-content:center;border-radius:2px;
+  flex:none;margin-bottom:42px}
+.rail-item{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--ink-2);padding:8px 0;margin-bottom:14px;
+  transition:color 150ms ease-out}
+.rail-item svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:square;stroke-linejoin:miter}
+.rail-item span{font-family:var(--serif);font-size:11px;letter-spacing:3px}
+.rail-item:hover{color:var(--accent-hover)}
+.rail-item.active{color:var(--accent)}
+.rail-spacer{flex:1}
+/* ============ 演示控件（不属产品界面） ============ */
+.demo{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;margin-top:26px}
+.demo-cap{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--ink-3);opacity:.7}
+.demo-label{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--ink-3);margin:14px 0 3px}
+.demo-btn{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink-3);width:44px;text-align:center;
+  padding:3px 0;border-bottom:1px solid transparent;transition:color 150ms ease-out,border-color 150ms ease-out}
+.demo-btn:hover{color:var(--ink-2)}
+.demo-btn.on{color:var(--ink-1);border-bottom-color:var(--ink-1)}
+/* ============ 当天日记面板（左） ============ */
+.panel-diary{width:472px;flex:none;border-right:1px solid var(--hairline);padding:26px 30px 20px;
+  display:flex;flex-direction:column;gap:14px;overflow:hidden}
+.p-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--ink-1);padding-bottom:12px}
+.p-head h1{font-family:var(--serif);font-size:22px;font-weight:600;letter-spacing:4px}
+.p-head time{font-family:var(--mono);font-size:11px;color:var(--ink-2);letter-spacing:1px}
+/* 书写区：无边界、无底色、无格线的纯留白；空态由占位文字独立承担（见 02 §3.5） */
+.editor{flex:none}
+.editor textarea{display:block;width:100%;min-height:200px;max-height:45vh;
+  background:transparent;border:none;outline:none;resize:none;
+  font-family:var(--serif);font-size:15px;line-height:1.9;color:var(--ink-1);
+  padding-top:8px}
+.editor textarea::placeholder{font-family:var(--serif);font-size:17px;letter-spacing:1.5px;color:var(--ink-3)}
+.editor-foot{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.attach-slot{display:flex;align-items:center;min-height:26px}
+.btn-attach{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);letter-spacing:1px;
+  padding:4px 10px 4px 8px;border:1px solid transparent;border-radius:2px;
+  transition:color 150ms ease-out,border-color 150ms ease-out}
+.btn-attach svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:square;stroke-linejoin:miter}
+.btn-attach:hover{color:var(--ink-1);border-color:var(--hairline-strong)}
+.attach-preview{display:flex;align-items:center;gap:10px}
+.attach-thumb{position:relative;width:72px;height:72px;flex:none}
+.attach-thumb img{width:72px;height:72px;object-fit:cover;border-radius:2px;display:block;border:1px solid var(--hairline)}
+.attach-remove{position:absolute;top:-6px;right:-6px;width:18px;height:18px;line-height:1;font-size:11px;
+  background:var(--bg-page);border:1px solid var(--hairline-strong);border-radius:2px;color:var(--ink-2);
+  display:flex;align-items:center;justify-content:center}
+.attach-remove:hover{color:var(--accent);border-color:var(--accent)}
+.attach-name{font-size:12px;color:var(--ink-3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-zhu{background:var(--accent);color:var(--on-accent);font-size:13px;font-weight:500;letter-spacing:4px;
+  padding:9px 28px;border-radius:2px;min-width:132px;text-align:center;
+  transition:background-color 150ms ease-out,transform 120ms ease-out}
+.btn-zhu:hover{background:var(--accent-hover)}
+.btn-zhu:active{transform:translateY(1px)}
+/* 空内容禁用态 = 未填墨的铅字框（开始输入即「落墨」） */
+.btn-zhu:disabled{background:transparent;color:var(--ink-3);box-shadow:inset 0 0 0 1px var(--hairline-strong);cursor:default}
+.btn-zhu:disabled:hover{background:transparent}
+.btn-zhu:disabled:active{transform:none}
+/* 今天已写 */
+.today-list{border-top:1px solid var(--hairline);padding-top:14px;display:flex;flex-direction:column;gap:0;overflow-y:auto}
+.cap{font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--ink-2);margin-bottom:2px}
+.entry{padding:14px 0 13px;display:flex;flex-direction:column;gap:9px}
+.entry+.entry{border-top:1px solid var(--hairline)}
+.e-meta{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.e-meta time{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--ink-2)}
+.crisis{display:inline-flex;align-items:center;gap:4px;color:var(--ink-3);font-size:10px;letter-spacing:1px;
+  transition:color 150ms ease-out}
+.crisis svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:square;stroke-linejoin:miter}
+.crisis:hover{color:var(--ink-2)}
+.entry .body{font-family:var(--serif);font-size:15px;line-height:1.9}
+.thumb{width:72px;height:72px;object-fit:cover;border-radius:2px;border:1px solid var(--hairline);display:block;cursor:zoom-in}
+.mood{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chip{font-family:var(--serif);font-size:11px;letter-spacing:2px;color:var(--mood-low);
+  border:1px solid currentColor;background:transparent;padding:2px 9px;border-radius:1px}
+.chip.anx{color:var(--mood-anx)}
+.chip.anger{color:var(--mood-anger)}
+.chip.wronged{color:var(--mood-wronged)}
+.chip.tired{color:var(--mood-tired)}
+.chip.calm{color:var(--mood-calm)}
+.chip.hope{color:var(--mood-hope)}
+.chip.lonely{color:var(--mood-lonely)}
+.chip.mute{color:var(--mood-neutral)}
+.dots{font-family:var(--serif);font-size:11px;letter-spacing:0;line-height:1;display:inline-flex}
+.dots .on{color:var(--ink-2)}
+.dots .off{color:var(--hairline-strong)}
+.summary{font-family:var(--serif);font-size:13px;color:var(--ink-2)}
+.summary.analyzing{color:var(--ink-3)}
+/* ============ 对话面板（右） ============ */
+.panel-chat{flex:1;display:flex;flex-direction:column;min-width:0}
+.c-head{display:flex;justify-content:space-between;align-items:center;padding:17px 26px;border-bottom:1px solid var(--hairline)}
+.c-head h2{font-family:var(--serif);font-size:16px;font-weight:600;letter-spacing:4px}
+.c-btns{display:flex;align-items:center;gap:14px}
+.btn-ghost{font-size:12px;color:var(--ink-2);letter-spacing:1px;padding:4px 1px;
+  border-bottom:1px solid transparent;transition:color 150ms ease-out,border-color 150ms ease-out}
+.btn-ghost:hover{color:var(--ink-1);border-bottom-color:var(--hairline-strong)}
+.btn-outline{border:1px solid var(--hairline-strong);color:var(--ink-1);font-size:12px;letter-spacing:2px;
+  padding:6px 15px;border-radius:2px;transition:border-color 150ms ease-out,color 150ms ease-out}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.msgs{flex:1;padding:22px 28px;display:flex;flex-direction:column;gap:18px;overflow-y:auto}
+.wake{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--ink-2)}
+.msg-agent{border-left:2px solid var(--ink-1);padding-left:15px;max-width:78%}
+.msg-agent p{font-family:var(--serif);font-size:15px;line-height:1.9}
+.caret{display:inline-block;width:8px;height:15px;background:var(--accent);vertical-align:-2px;margin-left:5px;
+  animation:caretBreath 1200ms ease-in-out infinite}
+.msg-user{align-self:flex-end;background:var(--accent-soft);padding:10px 16px;max-width:68%}
+.msg-user p{font-size:14px;line-height:1.8}
+.input{display:flex;gap:12px;padding:14px 26px;border-top:1px solid var(--hairline);align-items:center}
+.box{flex:1;border:1px solid var(--hairline-strong);border-radius:2px;padding:11px 16px;font-family:var(--sans);
+  font-size:13px;color:var(--ink-1);background:transparent;outline:none;
+  transition:border-color 150ms ease-out}
+.box::placeholder{color:var(--ink-3)}
+.box:focus{border-color:var(--accent)}
+.btn-send{background:var(--accent);color:var(--on-accent);font-size:13px;font-weight:500;letter-spacing:3px;
+  padding:10px 27px;border-radius:2px;transition:background-color 150ms ease-out,transform 120ms ease-out}
+.btn-send:hover{background:var(--accent-hover)}
+.btn-send:active{transform:translateY(1px)}
+/* ============ 历史日记抽屉（浮层 · 允许 3 级影） ============ */
+.scrim{position:absolute;inset:0;background:rgba(28,27,24,.32);opacity:0;transition:opacity 200ms cubic-bezier(.32,.72,0,1);z-index:20}
+.scrim.open{opacity:1}
+.drawer{position:absolute;top:0;bottom:0;left:64px;width:340px;background:var(--bg-page);z-index:30;
+  border-right:1px solid var(--hairline);box-shadow:12px 0 32px -4px rgba(28,27,24,.10);
+  transform:translateX(-102%);transition:transform 260ms cubic-bezier(.32,.72,0,1);
+  display:flex;flex-direction:column;gap:12px;padding:22px 22px 16px;overflow-y:auto}
+.drawer.open{transform:none}
+.d-head{display:flex;justify-content:space-between;align-items:center}
+.d-head h2{font-family:var(--serif);font-size:16px;font-weight:600;letter-spacing:4px}
+.d-close{font-size:16px;color:var(--ink-2);line-height:1;transition:color 150ms ease-out}
+.d-close:hover{color:var(--accent)}
+/* ============ 配置弹窗（浮层 · 允许 4 级影） ============ */
+.dialog-scrim{position:absolute;inset:0;background:rgba(28,27,24,.32);z-index:40;display:flex;align-items:center;justify-content:center}
+.dialog{width:460px;background:var(--bg-page);border:1px solid var(--hairline-strong);border-radius:4px;
+  box-shadow:0 16px 48px -8px rgba(28,27,24,.24);padding:24px;display:flex;flex-direction:column;gap:16px}
+.dialog h2{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:3px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:500;color:var(--ink-2);letter-spacing:1px}
+.field input{height:38px;border:1px solid var(--hairline-strong);border-radius:2px;background:transparent;
+  padding:0 12px;font-family:var(--sans);font-size:13px;color:var(--ink-1);outline:none;
+  transition:border-color 150ms ease-out}
+.field input:focus{border-color:var(--accent)}
+.d-note{font-size:12px;color:var(--ink-3)}
+.d-btns{display:flex;justify-content:flex-end;gap:8px}
+.btn-cancel{border:1px solid var(--hairline-strong);color:var(--ink-2);font-size:13px;letter-spacing:2px;
+  padding:8px 18px;border-radius:2px;transition:border-color 150ms ease-out,color 150ms ease-out}
+.btn-cancel:hover{border-color:var(--ink-2);color:var(--ink-1)}
+.btn-save{background:var(--accent);color:var(--on-accent);font-size:13px;font-weight:500;letter-spacing:2px;
+  padding:8px 20px;border-radius:2px;transition:background-color 150ms ease-out}
+.btn-save:hover{background:var(--accent-hover)}
+/* ============ 图片查看（浮层 · 允许 4 级影） ============ */
+.lightbox{position:absolute;inset:0;z-index:50;background:rgba(28,27,24,.6);display:flex;align-items:center;justify-content:center;padding:48px}
+.lightbox img{max-width:100%;max-height:100%;border-radius:2px;box-shadow:0 16px 48px -8px rgba(28,27,24,.4)}
+/* ============ 动效 · 纸与墨 ============
+   纸上不会飘——除抽屉「抽纸」外，入场一律不使用位移。只保留两种原生动作：
+     落墨 inkBleed   —— 内容出现：只用透明度，快出慢收，像墨浸入纸
+     落印 stampPress —— 成块内容压上纸面：1.03 → 1，即从略高处按下（近大远小），加透明度
+   状态反馈（悬停 / 聚焦 / 按压 / 禁用）不受此约束——那是触感，不是入场。 */
+@keyframes inkBleed{from{opacity:0}to{opacity:1}}
+@keyframes stampPress{from{opacity:0;transform:scale(1.03)}to{opacity:1;transform:none}}
+@keyframes caretBreath{0%,100%{opacity:1}50%{opacity:.28}}
+@keyframes breath{0%,100%{opacity:.6}50%{opacity:1}}
+/* 档位「墨」（默认）：内容带落墨与落印 */
+html[data-motion="ink"] .entry.enter{animation:stampPress 260ms cubic-bezier(.2,.8,.3,1) both}
+html[data-motion="ink"] .seal-in{animation:stampPress 200ms cubic-bezier(.2,.8,.3,1) both}
+html[data-motion="ink"] .summary.analyzing{animation:breath 1900ms ease-in-out infinite}
+/* 档位「静」：内容不做任何入场，只保留状态反馈与浮层位移 */
+/* 尊重系统减弱动效：一律不做动效，光标静置 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .caret{opacity:1}
+}
+</style>
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<div class="app">
+  <!-- 窄栏 -->
+  <aside class="rail">
+    <div class="seal">低</div>
+    <button class="rail-item active" id="btn-history">
+      <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <span>历史</span>
+    </button>
+
+    <!-- 演示控件（非产品界面） -->
+    <div class="demo">
+      <p class="demo-cap">演示</p>
+      <p class="demo-label">主题</p>
+      <button class="demo-btn on" id="t-light">信笺</button>
+      <button class="demo-btn" id="t-dark">夜笺</button>
+      <p class="demo-label">动效</p>
+      <button class="demo-btn" id="m-static">静</button>
+      <button class="demo-btn on" id="m-ink">墨</button>
+    </div>
+
+    <div class="rail-spacer"></div>
+    <button class="rail-item" id="btn-settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.08a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>设置</span>
+    </button>
+  </aside>
+
+  <!-- 当天日记面板 -->
+  <section class="panel-diary">
+    <header class="p-head"><h1>今天</h1><time>2026.10.05 MON</time></header>
+
+    <div class="editor">
+      <textarea id="editor" placeholder="此刻的心情，写下来吧"></textarea>
+    </div>
+
+    <div class="editor-foot">
+      <div class="attach-slot">
+        <input type="file" id="file-input" accept="image/png,image/jpeg" hidden>
+        <button class="btn-attach" id="btn-attach">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>贴图
+        </button>
+        <div class="attach-preview" id="attach-preview" hidden>
+          <span class="attach-thumb">
+            <img id="attach-img" alt="待贴图片预览">
+            <button class="attach-remove" id="attach-remove" aria-label="移除图片">✕</button>
+          </span>
+          <span class="attach-name" id="attach-name"></span>
+        </div>
+      </div>
+      <button class="btn-zhu" id="submit" disabled>记录今天</button>
+    </div>
+
+    <div class="today-list" id="today-list">
+      <p class="cap">今天已写</p>
+      <article class="entry">
+        <div class="e-meta">
+          <time>21:47</time>
+          <span class="crisis" title="这一天，多照顾自己一点">
+            <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.4-9-8.5A5.2 5.2 0 0 1 12 6a5.2 5.2 0 0 1 9 6.5C19 16.6 12 21 12 21z"/><path d="M8.5 12h2l1-2 1.5 3.5 1-1.5h1.5"/></svg>
+          </span>
+        </div>
+        <p class="body">今天开完会被领导当众批评了方案，回来的路上一直在想，是不是自己真的不行。路过楼下那家甜品店，突然特别想吃点甜的。</p>
+        <div class="mood">
+          <span class="chip">低落</span><span class="chip anx">焦虑</span>
+          <span class="dots" role="img" aria-label="强度 5 / 10"><span class="on">●●●●●</span><span class="off">○○○○○</span></span>
+        </div>
+        <p class="summary">——被否定的一天里，疲惫盖过了委屈</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- 对话面板 -->
+  <section class="panel-chat">
+    <header class="c-head">
+      <h2>对话</h2>
+      <div class="c-btns">
+        <button class="btn-ghost">历史会话</button>
+        <button class="btn-outline">新的唤醒</button>
+      </div>
+    </header>
+    <div class="msgs">
+      <p class="wake">它刚翻过你近几天的日记</p>
+      <div class="msg-agent"><p>我看你这两天都睡得很晚，昨天一整天也过得有些空。今天想跟我说说发生了什么吗？不想说也没关系，我在。<span class="caret"></span></p></div>
+      <div class="msg-user"><p>今天开会被否了，方案改了三版还是不行。</p></div>
+    </div>
+    <footer class="input">
+      <input class="box" placeholder="想说点什么…">
+      <button class="btn-send">发送</button>
+    </footer>
+  </section>
+
+  <!-- 历史日记抽屉 -->
+  <div class="scrim" id="drawer-scrim" hidden></div>
+  <aside class="drawer" id="drawer" hidden>
+    <div class="d-head">
+      <h2>历史日记</h2>
+      <button class="d-close" id="drawer-close">✕</button>
+    </div>
+    <article class="entry">
+      <div class="e-meta"><time>昨天 · 23:10</time></div>
+      <p class="body">凌晨又刷手机到两点，明知第二天会后悔，还是停不下来。好像只有深夜的时间才真正属于自己。</p>
+      <div class="mood">
+        <span class="chip tired">疲惫</span><span class="chip mute">孤独</span>
+        <span class="dots" role="img" aria-label="强度 7 / 10"><span class="on">●●●●●●●</span><span class="off">○○○</span></span>
+      </div>
+      <p class="summary">——深夜的清醒，是白天太满了</p>
+    </article>
+    <article class="entry">
+      <div class="e-meta"><time>10月3日 · 08:30</time></div>
+      <p class="body">周末计划全部泡汤，一整天什么都没做，晚上有点空落落的。</p>
+      <p class="summary analyzing">心情记录生成中…</p>
+    </article>
+  </aside>
+
+  <!-- 配置弹窗 -->
+  <div class="dialog-scrim" id="dialog" hidden>
+    <div class="dialog" role="dialog" aria-label="配置模型">
+      <h2>配置模型</h2>
+      <div class="field">
+        <label for="f-url">Base URL</label>
+        <input id="f-url" value="https://api.example.com/v1">
+      </div>
+      <div class="field">
+        <label for="f-key">API Key</label>
+        <input id="f-key" type="password" value="sk-****abcd">
+      </div>
+      <div class="field">
+        <label for="f-model">模型名</label>
+        <input id="f-model" placeholder="如 gpt-4o-mini">
+      </div>
+      <p class="d-note">配置只保存在这台电脑上。</p>
+      <div class="d-btns">
+        <button class="btn-cancel" id="dialog-cancel">取消</button>
+        <button class="btn-save">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图片查看 -->
+  <div class="lightbox" id="lightbox" hidden><img id="lightbox-img" alt=""></div>
+</div>
+
+<script>
+/* ---- 演示控件：主题与动效档位（与 Vue 实现同机制：CSS 变量 + data-* 属性） ---- */
+var root = document.documentElement;
+
+function bindToggle(buttons, apply){
+  buttons.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      buttons.forEach(function(b){ b.classList.toggle('on', b === btn); });
+      apply(btn.dataset.value);
+    });
+  });
+}
+
+// 主题：即时切换——纸的更换不是渐变，是开灯
+var themeBtns = [document.getElementById('t-light'), document.getElementById('t-dark')];
+themeBtns[0].dataset.value = 'light';
+themeBtns[1].dataset.value = 'dark';
+bindToggle(themeBtns, function(value){
+  if(value === 'dark'){ root.setAttribute('data-theme', 'dark'); }
+  else { root.removeAttribute('data-theme'); }
+});
+
+// 动效：静（内容不做入场） / 墨（落墨与落印）
+var motionBtns = [document.getElementById('m-static'), document.getElementById('m-ink')];
+motionBtns[0].dataset.value = 'static';
+motionBtns[1].dataset.value = 'ink';
+bindToggle(motionBtns, function(value){ root.setAttribute('data-motion', value); });
+
+/* ---- 记录流：编辑器 → 记录今天 → 条目落墨 → 心情记录落印 ---- */
+var editor = document.getElementById('editor');
+var submit = document.getElementById('submit');
+var todayList = document.getElementById('today-list');
+var fileInput = document.getElementById('file-input');
+var btnAttach = document.getElementById('btn-attach');
+var attachPreview = document.getElementById('attach-preview');
+var attachImg = document.getElementById('attach-img');
+var attachName = document.getElementById('attach-name');
+var pendingImage = null;
+
+// 编辑器随内容增高（上限由 CSS max-height 收口）
+editor.addEventListener('input', function(){
+  editor.style.height = 'auto';
+  editor.style.height = Math.max(200, editor.scrollHeight) + 'px';
+  submit.disabled = editor.value.trim() === '';
+});
+
+var pad = function(n){ return (n < 10 ? '0' : '') + n; };
+var nowTime = function(){ var d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+
+// 演示用心情记录：轮换取自 02 号文档情绪色族
+var moodPool = [
+  { chips: [['低落', ''], ['疲惫', 'tired']], on: 6, summary: '——今晚的话不多，但都是真的' },
+  { chips: [['平静', 'calm'], ['委屈', '']], on: 4, summary: '——把话写下来，就先放下一半' }
+];
+var moodSeq = 0;
+
+function buildDots(on){
+  var span = document.createElement('span');
+  span.className = 'dots';
+  span.setAttribute('role', 'img');
+  span.setAttribute('aria-label', '强度 ' + on + ' / 10');
+  var filled = document.createElement('span'); filled.className = 'on'; filled.textContent = new Array(on + 1).join('●');
+  var empty  = document.createElement('span'); empty.className = 'off'; empty.textContent = new Array(11 - on).join('○');
+  span.appendChild(filled); span.appendChild(empty);
+  return span;
+}
+
+function buildMood(){
+  var data = moodPool[moodSeq++ % moodPool.length];
+  var wrap = document.createElement('div');
+  wrap.className = 'seal-in';
+  var mood = document.createElement('div');
+  mood.className = 'mood';
+  data.chips.forEach(function(pair){
+    var chip = document.createElement('span');
+    chip.className = 'chip' + (pair[1] ? ' ' + pair[1] : '');
+    chip.textContent = pair[0];
+    mood.appendChild(chip);
+  });
+  mood.appendChild(buildDots(data.on));
+  var summary = document.createElement('p');
+  summary.className = 'summary';
+  summary.textContent = data.summary;
+  wrap.appendChild(mood);
+  wrap.appendChild(summary);
+  return wrap;
+}
+
+function insertEntry(text, imageUrl){
+  var card = document.createElement('article');
+  card.className = 'entry enter';
+
+  var meta = document.createElement('div');
+  meta.className = 'e-meta';
+  var time = document.createElement('time');
+  time.textContent = nowTime();
+  meta.appendChild(time);
+  card.appendChild(meta);
+
+  var body = document.createElement('p');
+  body.className = 'body';
+  body.textContent = text;
+  card.appendChild(body);
+
+  if(imageUrl){
+    var thumb = document.createElement('img');
+    thumb.className = 'thumb';
+    thumb.src = imageUrl;
+    thumb.alt = '日记配图';
+    thumb.addEventListener('click', function(){ openLightbox(imageUrl); });
+    card.appendChild(thumb);
+  }
+
+  var analyzing = document.createElement('p');
+  analyzing.className = 'summary analyzing';
+  analyzing.textContent = '心情记录生成中…';
+  card.appendChild(analyzing);
+
+  todayList.insertBefore(card, todayList.children[1]);
+
+  // 分析链路返回后：心情记录落印抵达
+  setTimeout(function(){
+    analyzing.remove();
+    card.appendChild(buildMood());
+  }, 1500);
+}
+
+submit.addEventListener('click', function(){
+  var text = editor.value.trim();
+  if(!text){ return; }
+  var imageUrl = pendingImage;
+
+  submit.disabled = true;
+  submit.textContent = '记录中…';
+  insertEntry(text, imageUrl);
+
+  // 提交后清空编辑器与预览
+  editor.value = '';
+  editor.style.height = '';
+  clearAttach();
+
+  setTimeout(function(){
+    submit.textContent = '记录今天';
+    submit.disabled = editor.value.trim() === '';
+  }, 1500);
+});
+
+/* ---- 贴图 ---- */
+btnAttach.addEventListener('click', function(){ fileInput.click(); });
+fileInput.addEventListener('change', function(){
+  var file = fileInput.files && fileInput.files[0];
+  if(!file){ return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    pendingImage = e.target.result;
+    attachImg.src = pendingImage;
+    attachName.textContent = file.name;
+    btnAttach.hidden = true;
+    attachPreview.hidden = false;
+  };
+  reader.readAsDataURL(file);
+});
+function clearAttach(){
+  pendingImage = null;
+  fileInput.value = '';
+  attachPreview.hidden = true;
+  btnAttach.hidden = false;
+}
+document.getElementById('attach-remove').addEventListener('click', clearAttach);
+
+/* ---- 图片查看 ---- */
+var lightbox = document.getElementById('lightbox');
+var lightboxImg = document.getElementById('lightbox-img');
+function openLightbox(src){ lightboxImg.src = src; lightbox.hidden = false; }
+function closeLightbox(){ lightbox.hidden = true; lightboxImg.removeAttribute('src'); }
+lightbox.addEventListener('click', closeLightbox);
+
+/* ---- 历史日记抽屉 ---- */
+var drawer = document.getElementById('drawer');
+var drawerScrim = document.getElementById('drawer-scrim');
+function openDrawer(){
+  drawer.hidden = false; drawerScrim.hidden = false;
+  requestAnimationFrame(function(){ drawer.classList.add('open'); drawerScrim.classList.add('open'); });
+}
+function closeDrawer(){
+  drawer.classList.remove('open'); drawerScrim.classList.remove('open');
+  setTimeout(function(){ drawer.hidden = true; drawerScrim.hidden = true; }, 260);
+}
+document.getElementById('btn-history').addEventListener('click', function(){
+  drawer.hidden ? openDrawer() : closeDrawer();
+});
+document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+drawerScrim.addEventListener('click', closeDrawer);
+
+/* ---- 配置弹窗 ---- */
+var dialog = document.getElementById('dialog');
+function openDialog(){ dialog.hidden = false; }
+function closeDialog(){ dialog.hidden = true; }
+document.getElementById('btn-settings').addEventListener('click', openDialog);
+document.getElementById('dialog-cancel').addEventListener('click', closeDialog);
+dialog.addEventListener('click', function(e){ if(e.target === dialog){ closeDialog(); } });
+
+/* ---- 键盘：Esc 关闭最上层浮层 ---- */
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Escape'){ return; }
+  if(!lightbox.hidden){ closeLightbox(); }
+  else if(!dialog.hidden){ closeDialog(); }
+  else if(!drawer.hidden){ closeDrawer(); }
+});
+</script>
+</body>
+</html>

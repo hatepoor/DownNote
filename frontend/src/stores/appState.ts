@@ -1,0 +1,99 @@
+// 全局应用状态（组合式单例，不引 Pinia）：
+// 模型配置 / 降级标志 / 当前视图 / 长期记忆缓存 / 日夜主题。
+export {}
+
+import { computed, ref } from 'vue'
+
+import { fetchMemories, fetchModelSettings, type MemoryItem } from '../api/client'
+
+export type AppView = 'workbench' | 'memory'
+export type AppTheme = 'light' | 'dark'
+
+const THEME_KEY = 'down-note:theme'
+
+const modelConfigured = ref<boolean | null>(null) // null = 尚未查询
+
+const currentView = ref<AppView>('workbench')
+
+const memories = ref<MemoryItem[]>([])
+const memoriesFailed = ref(false)
+
+const theme = ref<AppTheme>('light') // 日间=信笺 | 夜间=夜笺（token 切换，见 style.css）
+
+export const degraded = computed(() => modelConfigured.value === false)
+
+export { currentView, memories, memoriesFailed, theme }
+
+export function switchView(view: AppView): void {
+  currentView.value = view
+}
+
+function applyTheme(next: AppTheme): void {
+  theme.value = next
+  document.documentElement.dataset.theme = next
+  syncTitlebar(next)
+}
+
+// 挂载前调用：已选过就照旧；首次运行跟随系统偏好
+export function initTheme(): void {
+  const saved = localStorage.getItem(THEME_KEY)
+  if (saved === 'light' || saved === 'dark') {
+    applyTheme(saved)
+    return
+  }
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  applyTheme(prefersDark ? 'dark' : 'light')
+}
+
+// 主题切换：整页交叉淡化（View Transitions，320ms 落墨曲线，规格见 style.css ::view-transition-*）。
+// 设计稿轮次02 曾定"即时切换"；2026-10-07 用户验收反馈日夜互换瞬时跳变刺眼，改为过渡——遮罩叠加仍是禁用项。
+// 内核不支持 startViewTransition 时回退瞬时切换。
+type DocumentWithViewTransition = Document & {
+  startViewTransition?: (updateCallback: () => void) => unknown
+}
+
+type PywebviewBridge = { api?: { setTitlebarDark?: (dark: boolean) => void } }
+
+// 桌面壳（pywebview）下把主题同步到窗口标题栏；浏览器无此对象，静默跳过
+function syncTitlebar(next: AppTheme): void {
+  const bridge = (window as unknown as { pywebview?: PywebviewBridge }).pywebview
+  bridge?.api?.setTitlebarDark?.(next === "dark")
+}
+
+// 挂载后调用：立即同步一次，并兜住 pywebview 注入晚于挂载的情况
+export function bindTitlebarSync(): void {
+  syncTitlebar(theme.value)
+  window.addEventListener("pywebviewready", () => syncTitlebar(theme.value), { once: true })
+}
+
+export function toggleTheme(): void {
+  const next: AppTheme = theme.value === 'dark' ? 'light' : 'dark'
+  const apply = (): void => {
+    localStorage.setItem(THEME_KEY, next)
+    applyTheme(next)
+  }
+  const doc = document as DocumentWithViewTransition
+  if (typeof doc.startViewTransition === 'function') {
+    doc.startViewTransition(apply)
+    return
+  }
+  apply()
+}
+
+export async function refreshConfig(): Promise<void> {
+  try {
+    const settings = await fetchModelSettings()
+    modelConfigured.value = settings.configured
+  } catch {
+    modelConfigured.value = false
+  }
+}
+
+export async function refreshMemories(): Promise<void> {
+  memoriesFailed.value = false
+  try {
+    memories.value = await fetchMemories()
+  } catch {
+    memoriesFailed.value = true
+  }
+}

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>低落日记 · 应用图标</title>
+<style>
+:root{
+  --bg-page:#FAF9F5; --bg-inset:#F1EFE9;
+  --ink-1:#1C1B18; --ink-2:#6E6A61; --ink-3:#94908A;
+  --hairline:#CEC7B6; --hairline-strong:#B5AC97;
+  --accent:#C2402A; --accent-soft:#F5EAE4;
+  --serif:"Noto Serif SC","Source Han Serif SC","SimSun",serif;
+  --sans:"Noto Sans SC","Source Han Sans SC","Microsoft YaHei UI",sans-serif;
+  --mono:"Cascadia Mono","Consolas",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg-page);color:var(--ink-1);font-family:var(--sans);font-size:14px;
+  -webkit-font-smoothing:antialiased;padding:44px 38px 72px}
+.wrap{max-width:940px;margin:0 auto}
+h1{font-family:var(--serif);font-size:26px;font-weight:600;letter-spacing:4px;
+  padding-bottom:14px;border-bottom:2px solid var(--ink-1)}
+.lede{font-family:var(--serif);font-size:14px;line-height:1.9;color:var(--ink-2);margin-top:16px}
+.lede b{color:var(--ink-1);font-weight:600}
+
+.sheet{margin-top:26px;border:1px solid var(--hairline)}
+.band{display:flex;align-items:flex-end;gap:26px;padding:18px 20px;min-height:74px;flex-wrap:wrap}
+.band + .band{border-top:1px solid var(--hairline)}
+.band.paper{background:#FAF9F5}
+.band.night{background:#1C1B18}
+.cell{display:flex;flex-direction:column;align-items:center;gap:7px}
+.cell img{display:block}
+.cell span{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink-3)}
+.band.night .cell span{color:#6E6A61}
+.zoom{display:flex;align-items:flex-end;gap:30px;padding:18px 20px;background:var(--bg-inset);
+  border-top:1px solid var(--hairline);flex-wrap:wrap}
+.zoom .cell img{image-rendering:pixelated;border:1px solid var(--hairline-strong)}
+.zoom .cell span{color:var(--ink-3)}
+.bar{display:flex;align-items:center;gap:10px;padding:10px 20px;border-top:1px solid var(--hairline);
+  background:#F1EFE9}
+.bar.night{background:#20201D}
+.bar em{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink-3);font-style:normal;margin-right:6px}
+.bar.night em{color:#6E6A61}
+
+h2{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:3px;margin-top:44px;
+  padding-bottom:10px;border-bottom:1px solid var(--hairline)}
+.why{font-size:13px;line-height:1.85;color:var(--ink-2);margin-top:12px}
+.why b{color:var(--ink-1);font-weight:500}
+.why li{margin-left:20px}
+table{border-collapse:collapse;width:100%;margin-top:14px;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:top;line-height:1.7}
+th{font-weight:500;color:var(--ink-2);font-family:var(--mono);font-size:11px;letter-spacing:1px}
+td b{font-weight:500}
+code{font-family:var(--mono);font-size:12px;background:var(--accent-soft);padding:1px 5px}
+footer{margin-top:52px;border-top:2px solid var(--ink-1);padding-top:18px;
+  font-size:13px;line-height:1.9;color:var(--ink-2)}
+footer b{color:var(--ink-1);font-weight:500}
+
+/* 与界面内印章并置 */
+.side{display:flex;align-items:center;gap:26px;padding:22px 20px;border:1px solid var(--hairline);
+  margin-top:16px;flex-wrap:wrap}
+.seal{width:34px;height:34px;background:var(--accent);color:#FAF9F5;font-family:var(--serif);
+  font-weight:600;font-size:19px;display:flex;align-items:center;justify-content:center;border-radius:2px;flex:none}
+.side .cap{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink-3);text-align:center}
+.side .box{display:flex;flex-direction:column;align-items:center;gap:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>低落日记 · 应用图标</h1>
+  <p class="lede">
+    满饱和朱砂方（<code>--accent</code> #C2402A）+ 纸白宋体「低」——界面内窄栏那枚印章的放大版。
+    虚线以下按<b>真实像素尺寸</b>排列，请在 100% 缩放下横着看一遍。
+  </p>
+
+  <div class="sheet">
+    <div class="band paper">
+      <div class="cell"><img src="png/icon-256.png" width="256" height="256"><span>256</span></div>
+    </div>
+    <div class="band paper">
+      <div class="cell"><img src="png/icon-128.png" width="128" height="128"><span>128</span></div>
+      <div class="cell"><img src="png/icon-64.png" width="64" height="64"><span>64</span></div>
+      <div class="cell"><img src="png/icon-48.png" width="48" height="48"><span>48</span></div>
+      <div class="cell"><img src="png/icon-32.png" width="32" height="32"><span>32</span></div>
+      <div class="cell"><img src="png/icon-24.png" width="24" height="24"><span>24</span></div>
+      <div class="cell"><img src="png/icon-16.png" width="16" height="16"><span>16</span></div>
+    </div>
+    <div class="band night">
+      <div class="cell"><img src="png/icon-64.png" width="64" height="64"><span>64</span></div>
+      <div class="cell"><img src="png/icon-48.png" width="48" height="48"><span>48</span></div>
+      <div class="cell"><img src="png/icon-32.png" width="32" height="32"><span>32</span></div>
+      <div class="cell"><img src="png/icon-24.png" width="24" height="24"><span>24</span></div>
+      <div class="cell"><img src="png/icon-16.png" width="16" height="16"><span>16</span></div>
+    </div>
+    <div class="zoom">
+      <div class="cell"><img src="png/icon-32.png" width="160" height="160"><span>32 ×5</span></div>
+      <div class="cell"><img src="png/icon-24.png" width="144" height="144"><span>24 ×6</span></div>
+      <div class="cell"><img src="png/icon-16.png" width="160" height="160"><span>16 ×10</span></div>
+    </div>
+    <div class="bar"><em>浅色任务栏</em>
+      <img src="png/icon-16.png" width="16" height="16">
+      <img src="png/icon-24.png" width="24" height="24">
+      <img src="png/icon-32.png" width="32" height="32">
+    </div>
+    <div class="bar night"><em>深色任务栏</em>
+      <img src="png/icon-16.png" width="16" height="16">
+      <img src="png/icon-24.png" width="24" height="24">
+      <img src="png/icon-32.png" width="32" height="32">
+    </div>
+  </div>
+
+  <h2>与界面内印章的关系</h2>
+  <div class="side">
+    <div class="box">
+      <div class="seal">低</div>
+      <span class="cap">窄栏印章 34px</span>
+    </div>
+    <div class="box">
+      <img src="png/icon-64.png" width="64" height="64">
+      <span class="cap">图标 64px</span>
+    </div>
+    <div class="box">
+      <img src="png/icon-256.png" width="128" height="128">
+      <span class="cap">图标 256px</span>
+    </div>
+    <p class="why" style="max-width:340px;margin:0">
+      同一个符号。界面里是 34px 的一小块朱砂；到桌面上放大成整枚印章——
+      这是应用标识的正常做法：界面里克制，任务栏里要被认出。
+    </p>
+  </div>
+
+  <h2>两套母版与实测记录</h2>
+  <table>
+    <tr><th>范围</th><th>母版</th><th>字重</th><th>原因</th></tr>
+    <tr>
+      <td>32–256px</td>
+      <td><code>icon.svg</code></td>
+      <td>宋体 600</td>
+      <td>与界面内印章同字重，字身约占方框 74%</td>
+    </tr>
+    <tr>
+      <td>16 / 24px</td>
+      <td><code>icon-small.svg</code></td>
+      <td><b>宋体 700</b></td>
+      <td>光学补偿：16px 下 600 的横画会灰掉，加粗一档才站得住</td>
+    </tr>
+  </table>
+  <p class="why">
+    <b>为什么小尺寸不做「几何简化」：</b>试过把「低」压成 4 笔几何骨架（亻的撇与竖、氐的横与斜钩），
+    16px 实测被读成「介」——笔画少了，字形就不是那个字了。改用<b>真实字形 + 加粗</b>后，
+    16px 放大仍能认出是「低」。这条是实测结论，不是判断。
+    <br>
+    也试过微软雅黑 Bold：清晰度略胜，但会破坏「宋体主导」的字体纪律，未采用。
+  </p>
+
+  <footer>
+    七档已合成单一 <code>icon.ico</code>（16/24/32/48/64/128/256，PNG 压缩条目），可直接用于
+    PyInstaller 的 <code>EXE(icon=…)</code>。<br>
+    母版改完跑 <code>bash 打包.sh</code> 重新生成。若渲染失败，先执行
+    <code>taskkill //F //IM msedge.exe</code> 清掉累积的无头进程再重试。
+  </footer>
+
+</div>
+</body>
+</html>

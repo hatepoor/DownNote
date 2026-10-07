@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <title>低落日记</title>
+  <!-- 应用图标（16 网格版，供 favicon 使用）。完整资产见 front_design/app-icon/ -->
+  <rect width="16" height="16" fill="#C2402A"/>
+  <text x="8" y="8.4" text-anchor="middle" dominant-baseline="central"
+        font-family="Noto Serif SC, Source Han Serif SC, SimSun, serif"
+        font-weight="700" font-size="13.5" fill="#FAF9F5">低</text>
+</svg>
