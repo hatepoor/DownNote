@@ -6,6 +6,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from down_note import config, scheduler
@@ -28,6 +29,20 @@ async def lifespan(app: FastAPI):
 
 def createApp() -> FastAPI:
     app = FastAPI(title="低落日记", version="0.1.0", lifespan=lifespan)
+
+    # Tauri 壳的页面源是 http(s)://tauri.localhost：壳内页面对本地后端的
+    # fetch / EventSource 都是跨源请求（PUT 等还会先发 OPTIONS 预检），
+    # 没有这段中间件会表现成 "Failed to fetch"。服务只绑 127.0.0.1，不外暴。
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://tauri.localhost",
+            "https://tauri.localhost",
+            "http://127.0.0.1:5173",
+        ],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # include_router 是 FastAPI 的 API，保持库的命名（编码规范强制例外）
     app.include_router(settingsRouter)

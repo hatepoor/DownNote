@@ -256,3 +256,30 @@ def test_updateEntryOnlyTodayAllowed(dataDir, dbFile):
     # 不存在 / 空内容
     assert local.put("/api/entries/999", json={"content": "x"}).status_code == 404
     assert local.put(f"/api/entries/{entryId}", json={"content": "   "}).status_code == 400
+
+
+def test_corsPreflightForTauriShell():
+    """Tauri 壳页面（tauri.localhost）跨源访问本地后端：预检与实际请求都放行。"""
+    client = TestClient(createApp())
+    preflight = client.options(
+        "/api/settings/model",
+        headers={
+            "Origin": "http://tauri.localhost",
+            "Access-Control-Request-Method": "PUT",
+        },
+    )
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == "http://tauri.localhost"
+
+    saved = client.put(
+        "/api/settings/model",
+        headers={"Origin": "http://tauri.localhost"},
+        json={
+            "baseUrl": "http://model.local/v1",
+            "modelName": "test-model",
+            "apiKey": "",
+            "temperature": 1,
+            "reasoningEffort": "low",
+        },
+    )
+    assert saved.headers["access-control-allow-origin"] == "http://tauri.localhost"
