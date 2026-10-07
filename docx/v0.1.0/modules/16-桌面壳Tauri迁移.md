@@ -40,3 +40,4 @@
 6. `w.emit` 在 Tauri 2 需要 `use tauri::Emitter;`（emit 移入了 Emitter trait）。
 7. build.py 子进程的 PATH 不含 `~/.cargo/bin`，需自行补（`os.environ["PATH"] += ...`）。
 8. **无控制台启动时 stdout/stderr 为 None**：双击运行（无控制台可继承）时 PyInstaller 的 `sys.stdout/stderr` 是 None，uvicorn 日志格式化器做 isatty() 彩色检测直接崩（`'NoneType' object has no attribute 'isatty'`，弹 Unhandled Exception 框）——`serve.py` 在 import uvicorn 前给 None 的 stdout/stderr 挂 `os.devnull`。**冒烟必须用分离启动复现**（PowerShell `Start-Process`），从终端启动有 stdout 继承、这个坑暴露不出来。
+9. **窗口缩放不触发分栏宽度钳制**：`diaryWidth` 只在拖动与挂载时钳制——大窗（最大化）下拖出的宽度存进 localStorage 后，还原小窗时对话栏（`min-width:0`）被整根压没。App.vue 监听 `window resize` 重新钳制（公式含窄栏 64 + 分栏命中区 9 + 对话栏最小 360）。

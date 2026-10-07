@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 应用骨架：窄栏 + 主区域（工作台：日记 + 对话，可拖拽分栏；记忆页）+ 抽屉 + 配置弹窗。
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 import ChatPanel from './components/ChatPanel.vue'
 import DegradedBanner from './components/DegradedBanner.vue'
@@ -26,7 +26,8 @@ let dragStartX = 0
 let dragStartWidth = 0
 
 function clampDiaryWidth(width: number): number {
-  const maxWidth = Math.max(DIARY_WIDTH_MIN, window.innerWidth - 64 - CHAT_WIDTH_MIN)
+  // 64 = 窄栏，9 = 分栏命中区，360 = 对话栏最小宽
+  const maxWidth = Math.max(DIARY_WIDTH_MIN, window.innerWidth - 64 - 9 - CHAT_WIDTH_MIN)
   return Math.min(Math.max(width, DIARY_WIDTH_MIN), maxWidth)
 }
 
@@ -52,6 +53,12 @@ function startDrag(event: MouseEvent): void {
 function resetDiaryWidth(): void {
   diaryWidth.value = clampDiaryWidth(DIARY_WIDTH_DEFAULT)
   localStorage.setItem(DIARY_WIDTH_KEY, String(diaryWidth.value))
+}
+
+// 窗口缩放（最大化/还原/拖边缘）时收回越界的日记宽度——
+// 否则大窗下拖出的宽度会把对话栏（min-width:0）压到消失
+function onWindowResize(): void {
+  diaryWidth.value = clampDiaryWidth(diaryWidth.value)
 }
 
 function toggleMemory(): void {
@@ -81,6 +88,11 @@ onMounted(() => {
   refreshConfig()
   const saved = Number(localStorage.getItem(DIARY_WIDTH_KEY))
   if (saved) diaryWidth.value = clampDiaryWidth(saved)
+  window.addEventListener('resize', onWindowResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onWindowResize)
 })
 </script>
 
