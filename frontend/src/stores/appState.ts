@@ -9,6 +9,9 @@ import { fetchMemories, fetchModelSettings, type MemoryItem } from '../api/clien
 export type AppView = 'workbench' | 'memory'
 export type AppTheme = 'light' | 'dark'
 
+// 运行环境：Tauri 壳（打包版 / tauri dev）为 true；纯浏览器 / Vite 开发为 false
+export const isTauri = '__TAURI_INTERNALS__' in window
+
 const THEME_KEY = 'down-note:theme'
 
 const modelConfigured = ref<boolean | null>(null) // null = 尚未查询

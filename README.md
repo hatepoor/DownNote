@@ -35,7 +35,7 @@
 
 ## 下载使用
 
-1. 从 [Releases](../../releases) 下载 `down_note-v0.1.0-setup.exe`，双击运行安装向导——选择安装位置、可选桌面快捷方式；不需要安装 Python 或 Node
+1. 从 [Releases](../../releases) 下载安装包（如 `DownNote_0.1.1_x64-setup.exe`），双击运行安装向导——选择安装位置、可选桌面快捷方式；不需要安装 Python 或 Node
 2. 安装完成自动启动，首次启动自动建库
 3. 点左侧栏「设置」配置模型，保存即生效
 

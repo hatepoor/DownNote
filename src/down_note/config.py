@@ -52,6 +52,11 @@ def getBundledRoot() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def getPort() -> int:
+    """API 服务端口：Tauri 壳会传随机空闲端口（DOWN_NOTE_PORT），开发默认 8000。"""
+    return int(os.environ.get("DOWN_NOTE_PORT", "8000"))
+
+
 def getEnvFile() -> Path:
     return getDataDir() / ENV_FILE_NAME
 

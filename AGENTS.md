@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-- 设计已收口，文件树与 v0.1.0 文档体系已建立；`src/`、`frontend/`、`tests/` 按各模块文档的 todolist 逐个推进（01-10、11-15 已完成；10 的干净机器验证待做）。技术形态已定：Vue（Vite）前端 + Python（FastAPI + APScheduler + SQLAlchemy + SQLite）后端，智能体层用 LangGraph 多智能体（主智能体 + 回顾/记忆管理子智能体，ADR-0005）+ pywebview 壳 + PyInstaller 打包 exe。
+- 设计已收口，文件树与 v0.1.0 文档体系已建立；`src/`、`frontend/`、`tests/` 按各模块文档的 todolist 逐个推进（01-10、11-16 已完成；v0.1.1 已发布——桌面壳迁移 Tauri 2，干净机器验证待做）。技术形态已定：Vue（Vite）前端 + Python（FastAPI + APScheduler + SQLAlchemy + SQLite）后端，智能体层用 LangGraph 多智能体（主智能体 + 回顾/记忆管理子智能体，ADR-0005），桌面壳 **Tauri 2**（`frontend/src-tauri/`，Rust 壳 + 后端 PyInstaller sidecar，见模块 16）。
 - 实测已确认：用户 model 为推理型（deepseek v4.1 flash，思考 token 计入 max_tokens 且长度随机），生成参数可由用户在设置里调整（温度默认 1.1、思考强度默认 low，存 settings 表，`buildChatModel` 真实应用），其余固定项与三级流式兜底不可动；危机关键词表中的变体来自真实对话验证，改动需谨慎。
 - Python 环境已用 uv 初始化：Python 3.12，虚拟环境 `.venv/`，依赖清单 `pyproject.toml`，锁文件 `uv.lock`。
 - 四条 ADR 已落盘 `docs/adr/`；当前版本总纲在 `docx/v0.1.0/README.md`（含里程碑与待定决议）。

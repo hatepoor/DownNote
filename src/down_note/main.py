@@ -18,7 +18,6 @@ from down_note import config
 from down_note.app import createApp
 
 HOST = "127.0.0.1"
-PORT = 8000
 DEV_URL = "http://127.0.0.1:5173"
 
 # 标题栏颜色随应用主题（COLORREF 为 0x00BBGGRR）；Win11 精确生效，Win10 只退深/浅开关
@@ -54,16 +53,17 @@ def resolveStartUrl() -> str:
         return override
     frontendDist = config.getBundledRoot() / "frontend" / "dist"
     if frontendDist.exists():
-        return f"http://{HOST}:{PORT}/"
+        return f"http://{HOST}:{config.getPort()}/"
     return DEV_URL
 
 
 def startServer() -> None:
+    # 工厂对象直接传（同 serve.py：冻结环境里字符串导入不可靠）
     uvicorn.run(
-            "down_note.app:createApp",
+            createApp,
             factory=True,
             host=HOST,
-            port=PORT,
+            port=config.getPort(),
             log_level="info",
         )
 
@@ -72,11 +72,11 @@ def waitServerReady(timeoutSeconds: float = 10.0) -> None:
     deadline = time.monotonic() + timeoutSeconds
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(f"http://{HOST}:{PORT}/api/health", timeout=1):
+            with urllib.request.urlopen(f"http://{HOST}:{config.getPort()}/api/health", timeout=1):
                 return
         except OSError:
             time.sleep(0.2)
-    raise RuntimeError(f"后端服务在 {timeoutSeconds} 秒内未就绪：http://{HOST}:{PORT}")
+    raise RuntimeError(f"后端服务在 {timeoutSeconds} 秒内未就绪：http://{HOST}:{config.getPort()}")
 
 
 def main() -> None:

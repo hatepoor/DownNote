@@ -11,8 +11,9 @@
 
   纪律：宋体主导 · 无卡片规则线 · 方角 2px（浮层 4px）· 常态零阴影 · 朱砂全站唯一暖色 · 铅字框情绪标签 · 等宽时间戳
  　　　纸上不会飘——除抽屉「抽纸」外，入场一律不用位移
-  本轮（02 修订）新增：纸纹工艺 · 对比度锚点提升（hairline/ink-3）· 动效「纸与墨」
-  书写区为纯留白（轮次02 试做的稿纸横格线经评审后移除，理由见 02 §3.5）
+  轮次02：纸纹工艺 · 对比度锚点提升 · 动效「纸与墨」；书写区曾试做稿纸横格线，评审后移除
+  轮次03：面色层次（纸/信笺/陪伴/窄栏四档）· 书写区改「信笺卡」（全站唯一允许阴影处）· 规则线右端渐隐
+ 　　　　· 在场呼吸点 · 正文行高放宽 · 用户气泡不对称圆角
   演示控件不属产品界面：其激活态用墨色而非朱砂，避免污染画面的朱砂用量判断。
 
   本文件自包含（无外部依赖），仅作定稿视觉参考与实现基准；窄栏中部可切换 信笺/夜笺 与 动效档位。
@@ -20,7 +21,9 @@
 <style>
 /* ============ Token · 信笺（浅，默认） ============ */
 :root{
-  --bg-page:#FAF9F5; --bg-surface:#FAF9F5; --bg-inset:#F1EFE9;
+  --bg-page:#FAF9F5; --bg-sheet:#FFFDF9; --bg-companion:#F4F2EC; --bg-inset:#F1EFE9;
+  --margin-line:rgba(194,64,42,.16);
+  --sheet-shadow:0 1px 2px rgba(28,27,24,.04), 0 12px 34px -22px rgba(28,27,24,.16);
   --ink-1:#1C1B18; --ink-2:#6E6A61; --ink-3:#94908A;
   --hairline:#CEC7B6; --hairline-strong:#B5AC97;
   --accent:#C2402A; --accent-hover:#A83422; --accent-soft:#F5EAE4; --on-accent:#FAF9F5;
@@ -35,7 +38,9 @@
 }
 /* ============ Token · 夜笺（深） ============ */
 [data-theme="dark"]{
-  --bg-page:#1C1B18; --bg-surface:#232220; --bg-inset:#171614;
+  --bg-page:#1C1B18; --bg-sheet:#232220; --bg-companion:#201F1C; --bg-inset:#171614;
+  --margin-line:rgba(210,74,50,.26);
+  --sheet-shadow:0 1px 2px rgba(0,0,0,.34), 0 12px 34px -22px rgba(0,0,0,.55);
   --ink-1:#EDEAE2; --ink-2:#A8A499; --ink-3:#6E6A61;
   --hairline:#423F38; --hairline-strong:#55514A;
   --accent:#D24A32; --accent-hover:#E05A40; --accent-soft:#3A231D; --on-accent:#FAF9F5;
@@ -79,19 +84,28 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .demo-btn:hover{color:var(--ink-2)}
 .demo-btn.on{color:var(--ink-1);border-bottom-color:var(--ink-1)}
 /* ============ 当天日记面板（左） ============ */
-.panel-diary{width:472px;flex:none;border-right:1px solid var(--hairline);padding:26px 30px 20px;
+.panel-diary{width:504px;flex:none;border-right:1px solid var(--hairline);padding:26px 24px 20px;
   display:flex;flex-direction:column;gap:14px;overflow:hidden}
-.p-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--ink-1);padding-bottom:12px}
+.p-head{position:relative;display:flex;justify-content:space-between;align-items:baseline;padding-bottom:12px}
+/* 面板头的墨线向右收梢渐隐——信笺页眉的那道线不会横贯到底 */
+.p-head::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;
+  background:linear-gradient(90deg,var(--ink-1) 0%,var(--ink-1) 76%,transparent 100%)}
 .p-head h1{font-family:var(--serif);font-size:22px;font-weight:600;letter-spacing:4px}
 .p-head time{font-family:var(--mono);font-size:11px;color:var(--ink-2);letter-spacing:1px}
-/* 书写区：无边界、无底色、无格线的纯留白；空态由占位文字独立承担（见 02 §3.5） */
-.editor{flex:none}
-.editor textarea{display:block;width:100%;min-height:200px;max-height:45vh;
+/* 书写区＝信笺卡：一张纸放在桌面上。边框＋微阴影＋左侧页边线。
+   全站唯一允许阴影的元素；圆角沿用全局 2px。见 02 §3.5 */
+.sheet{position:relative;flex:none;background:var(--bg-sheet);
+  border:1px solid var(--hairline);border-radius:2px;box-shadow:var(--sheet-shadow);
+  padding:24px 22px 16px;transition:border-color 320ms ease-out}
+.sheet::before{content:"";position:absolute;top:0;bottom:0;left:22px;width:1px;background:var(--margin-line)}
+.sheet:focus-within{border-color:var(--hairline-strong)}
+.sheet textarea{display:block;width:100%;min-height:186px;max-height:42vh;
   background:transparent;border:none;outline:none;resize:none;
-  font-family:var(--serif);font-size:15px;line-height:1.9;color:var(--ink-1);
-  padding-top:8px}
-.editor textarea::placeholder{font-family:var(--serif);font-size:17px;letter-spacing:1.5px;color:var(--ink-3)}
-.editor-foot{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+  font-family:var(--serif);font-size:15px;line-height:2.1;color:var(--ink-1);
+  padding:0 0 0 18px}
+.sheet textarea::placeholder{font-family:var(--serif);font-size:17px;letter-spacing:1.5px;color:var(--ink-3)}
+.sheet-foot{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;
+  margin-top:16px;padding:14px 0 0 18px;border-top:1px solid var(--hairline)}
 .attach-slot{display:flex;align-items:center;min-height:26px}
 .btn-attach{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);letter-spacing:1px;
   padding:4px 10px 4px 8px;border:1px solid transparent;border-radius:2px;
@@ -102,7 +116,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .attach-thumb{position:relative;width:72px;height:72px;flex:none}
 .attach-thumb img{width:72px;height:72px;object-fit:cover;border-radius:2px;display:block;border:1px solid var(--hairline)}
 .attach-remove{position:absolute;top:-6px;right:-6px;width:18px;height:18px;line-height:1;font-size:11px;
-  background:var(--bg-page);border:1px solid var(--hairline-strong);border-radius:2px;color:var(--ink-2);
+  background:var(--bg-sheet);border:1px solid var(--hairline-strong);border-radius:2px;color:var(--ink-2);
   display:flex;align-items:center;justify-content:center}
 .attach-remove:hover{color:var(--accent);border-color:var(--accent)}
 .attach-name{font-size:12px;color:var(--ink-3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -116,7 +130,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .btn-zhu:disabled:hover{background:transparent}
 .btn-zhu:disabled:active{transform:none}
 /* 今天已写 */
-.today-list{border-top:1px solid var(--hairline);padding-top:14px;display:flex;flex-direction:column;gap:0;overflow-y:auto}
+.today-list{position:relative;padding-top:15px;display:flex;flex-direction:column;gap:0;overflow-y:auto}
+.today-list::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(90deg,var(--hairline) 0%,var(--hairline) 76%,transparent 100%)}
 .cap{font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--ink-2);margin-bottom:2px}
 .entry{padding:14px 0 13px;display:flex;flex-direction:column;gap:9px}
 .entry+.entry{border-top:1px solid var(--hairline)}
@@ -126,7 +142,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   transition:color 150ms ease-out}
 .crisis svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:square;stroke-linejoin:miter}
 .crisis:hover{color:var(--ink-2)}
-.entry .body{font-family:var(--serif);font-size:15px;line-height:1.9}
+.entry .body{font-family:var(--serif);font-size:15px;line-height:2.05}
 .thumb{width:72px;height:72px;object-fit:cover;border-radius:2px;border:1px solid var(--hairline);display:block;cursor:zoom-in}
 .mood{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .chip{font-family:var(--serif);font-size:11px;letter-spacing:2px;color:var(--mood-low);
@@ -145,9 +161,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .summary{font-family:var(--serif);font-size:13px;color:var(--ink-2)}
 .summary.analyzing{color:var(--ink-3)}
 /* ============ 对话面板（右） ============ */
-.panel-chat{flex:1;display:flex;flex-direction:column;min-width:0}
-.c-head{display:flex;justify-content:space-between;align-items:center;padding:17px 26px;border-bottom:1px solid var(--hairline)}
-.c-head h2{font-family:var(--serif);font-size:16px;font-weight:600;letter-spacing:4px}
+.panel-chat{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg-companion)}
+.c-head{position:relative;display:flex;justify-content:space-between;align-items:center;padding:17px 26px}
+.c-head::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;
+  background:linear-gradient(90deg,var(--hairline) 0%,var(--hairline) 76%,transparent 100%)}
+.c-head h2{display:flex;align-items:center;gap:9px;font-family:var(--serif);font-size:16px;font-weight:600;letter-spacing:4px}
+/* 在场信号：它在。全站唯一的呼吸灯，与光标呼吸同源（见 02 §4.4） */
+.presence{width:7px;height:7px;flex:none;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-soft);animation:presenceBreath 3400ms ease-in-out infinite}
 .c-btns{display:flex;align-items:center;gap:14px}
 .btn-ghost{font-size:12px;color:var(--ink-2);letter-spacing:1px;padding:4px 1px;
   border-bottom:1px solid transparent;transition:color 150ms ease-out,border-color 150ms ease-out}
@@ -158,12 +179,15 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .msgs{flex:1;padding:22px 28px;display:flex;flex-direction:column;gap:18px;overflow-y:auto}
 .wake{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--ink-2)}
 .msg-agent{border-left:2px solid var(--ink-1);padding-left:15px;max-width:78%}
-.msg-agent p{font-family:var(--serif);font-size:15px;line-height:1.9}
+.msg-agent p{font-family:var(--serif);font-size:15px;line-height:2.05}
 .caret{display:inline-block;width:8px;height:15px;background:var(--accent);vertical-align:-2px;margin-left:5px;
   animation:caretBreath 1200ms ease-in-out infinite}
-.msg-user{align-self:flex-end;background:var(--accent-soft);padding:10px 16px;max-width:68%}
-.msg-user p{font-size:14px;line-height:1.8}
-.input{display:flex;gap:12px;padding:14px 26px;border-top:1px solid var(--hairline);align-items:center}
+/* 用户气泡缺右下角，指向自己——方向感来自圆角而非尾巴 */
+.msg-user{align-self:flex-end;background:var(--accent-soft);padding:10px 16px;max-width:68%;border-radius:2px 2px 0 2px}
+.msg-user p{font-size:14px;line-height:1.85}
+.input{position:relative;display:flex;gap:12px;padding:14px 26px;align-items:center}
+.input::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(90deg,var(--hairline) 0%,var(--hairline) 76%,transparent 100%)}
 .box{flex:1;border:1px solid var(--hairline-strong);border-radius:2px;padding:11px 16px;font-family:var(--sans);
   font-size:13px;color:var(--ink-1);background:transparent;outline:none;
   transition:border-color 150ms ease-out}
@@ -176,7 +200,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 /* ============ 历史日记抽屉（浮层 · 允许 3 级影） ============ */
 .scrim{position:absolute;inset:0;background:rgba(28,27,24,.32);opacity:0;transition:opacity 200ms cubic-bezier(.32,.72,0,1);z-index:20}
 .scrim.open{opacity:1}
-.drawer{position:absolute;top:0;bottom:0;left:64px;width:340px;background:var(--bg-page);z-index:30;
+.drawer{position:absolute;top:0;bottom:0;left:64px;width:340px;background:var(--bg-sheet);z-index:30;
   border-right:1px solid var(--hairline);box-shadow:12px 0 32px -4px rgba(28,27,24,.10);
   transform:translateX(-102%);transition:transform 260ms cubic-bezier(.32,.72,0,1);
   display:flex;flex-direction:column;gap:12px;padding:22px 22px 16px;overflow-y:auto}
@@ -187,7 +211,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .d-close:hover{color:var(--accent)}
 /* ============ 配置弹窗（浮层 · 允许 4 级影） ============ */
 .dialog-scrim{position:absolute;inset:0;background:rgba(28,27,24,.32);z-index:40;display:flex;align-items:center;justify-content:center}
-.dialog{width:460px;background:var(--bg-page);border:1px solid var(--hairline-strong);border-radius:4px;
+.dialog{width:460px;background:var(--bg-sheet);border:1px solid var(--hairline-strong);border-radius:4px;
   box-shadow:0 16px 48px -8px rgba(28,27,24,.24);padding:24px;display:flex;flex-direction:column;gap:16px}
 .dialog h2{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:3px}
 .field{display:flex;flex-direction:column;gap:6px}
@@ -215,6 +239,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 @keyframes inkBleed{from{opacity:0}to{opacity:1}}
 @keyframes stampPress{from{opacity:0;transform:scale(1.03)}to{opacity:1;transform:none}}
 @keyframes caretBreath{0%,100%{opacity:1}50%{opacity:.28}}
+@keyframes presenceBreath{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.78)}}
 @keyframes breath{0%,100%{opacity:.6}50%{opacity:1}}
 /* 档位「墨」（默认）：内容带落墨与落印 */
 html[data-motion="ink"] .entry.enter{animation:stampPress 260ms cubic-bezier(.2,.8,.3,1) both}
@@ -263,25 +288,25 @@ html[data-motion="ink"] .summary.analyzing{animation:breath 1900ms ease-in-out i
   <section class="panel-diary">
     <header class="p-head"><h1>今天</h1><time>2026.10.05 MON</time></header>
 
-    <div class="editor">
+    <div class="sheet">
       <textarea id="editor" placeholder="此刻的心情，写下来吧"></textarea>
-    </div>
 
-    <div class="editor-foot">
-      <div class="attach-slot">
-        <input type="file" id="file-input" accept="image/png,image/jpeg" hidden>
-        <button class="btn-attach" id="btn-attach">
-          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>贴图
-        </button>
-        <div class="attach-preview" id="attach-preview" hidden>
-          <span class="attach-thumb">
-            <img id="attach-img" alt="待贴图片预览">
-            <button class="attach-remove" id="attach-remove" aria-label="移除图片">✕</button>
-          </span>
-          <span class="attach-name" id="attach-name"></span>
+      <div class="sheet-foot">
+        <div class="attach-slot">
+          <input type="file" id="file-input" accept="image/png,image/jpeg" hidden>
+          <button class="btn-attach" id="btn-attach">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>贴图
+          </button>
+          <div class="attach-preview" id="attach-preview" hidden>
+            <span class="attach-thumb">
+              <img id="attach-img" alt="待贴图片预览">
+              <button class="attach-remove" id="attach-remove" aria-label="移除图片">✕</button>
+            </span>
+            <span class="attach-name" id="attach-name"></span>
+          </div>
         </div>
+        <button class="btn-zhu" id="submit" disabled>记录今天</button>
       </div>
-      <button class="btn-zhu" id="submit" disabled>记录今天</button>
     </div>
 
     <div class="today-list" id="today-list">
@@ -306,7 +331,7 @@ html[data-motion="ink"] .summary.analyzing{animation:breath 1900ms ease-in-out i
   <!-- 对话面板 -->
   <section class="panel-chat">
     <header class="c-head">
-      <h2>对话</h2>
+      <h2><span class="presence" aria-hidden="true"></span>对话</h2>
       <div class="c-btns">
         <button class="btn-ghost">历史会话</button>
         <button class="btn-outline">新的唤醒</button>

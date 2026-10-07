@@ -42,7 +42,7 @@ function handleStreamEvent(e: ChatStreamEvent): void {
   if (e.type === 'start') {
     sessionId.value = e.sessionId
     wakeNoteVisible.value = e.wakeNote === true
-    openEvents()
+    void openEvents()
   } else if (e.type === 'delta') {
     streamingText.value += e.text
   } else if (e.type === 'meta') {
@@ -64,9 +64,9 @@ function handleStreamEvent(e: ChatStreamEvent): void {
   }
 }
 
-function openEvents(): void {
+async function openEvents(): Promise<void> {
   eventSource?.close()
-  eventSource = openChatEvents(sessionId.value!, (e) => {
+  eventSource = await openChatEvents(sessionId.value!, (e) => {
     // 回顾结果回流：以"它"的气泡追加，不打断任何正在流式的回合
     if (e.type === 'recall' && e.message) {
       messages.value.push({ ...e.message, id: Date.now() })
@@ -126,7 +126,7 @@ async function loadSession(id: string): Promise<void> {
   streamingText.value = ''
   hotlines.value = null
   wakeNoteVisible.value = false
-  openEvents()
+  await openEvents()
 }
 
 function autoGrow(event: Event): void {

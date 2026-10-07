@@ -184,10 +184,18 @@ button:focus-visible {
   }
 }
 
-/* ---- 应用骨架：窄栏 + 面板 ---- */
+/* ---- 应用骨架：标题栏（壳下才显示）+ 窄栏 + 面板 ---- */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.app-shell .app {
+  flex: 1;
+  min-height: 0;
+}
 .app {
   display: flex;
-  height: 100vh;
 }
 .rail {
   width: 64px;

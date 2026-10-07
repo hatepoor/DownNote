@@ -1,0 +1,7 @@
+# Tauri 构建产物
+/target/
+/gen/schemas/
+
+# 构建脚本拷入的后端 sidecar（由 build.py 生成）
+/resources/backend/
+target/

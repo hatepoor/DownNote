@@ -8,7 +8,8 @@ import DiaryHistoryDrawer from './components/DiaryHistoryDrawer.vue'
 import DiaryPanel from './components/DiaryPanel.vue'
 import MemoryPanel from './components/MemoryPanel.vue'
 import ModelConfigDialog from './components/ModelConfigDialog.vue'
-import { bindTitlebarSync, currentView, refreshConfig, switchView, theme, toggleTheme } from './stores/appState'
+import TitleBar from './components/TitleBar.vue'
+import { bindTitlebarSync, currentView, isTauri, refreshConfig, switchView, theme, toggleTheme } from './stores/appState'
 import { todayString } from './utils/time'
 
 const DIARY_WIDTH_DEFAULT = 472
@@ -84,9 +85,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app">
-    <aside class="rail">
-      <div class="seal">低</div>
+  <div class="app-shell">
+    <TitleBar v-if="isTauri" />
+    <div class="app">
+      <aside class="rail">
+        <div class="seal">低</div>
       <button
         class="rail-item"
         :class="{ active: drawerOpen }"
@@ -172,5 +175,6 @@ onMounted(() => {
         @saved="refreshConfig"
       />
     </Transition>
+  </div>
   </div>
 </template>

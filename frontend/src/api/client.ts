@@ -78,31 +78,64 @@ export interface DiaryDayDetail {
   entries: EntryItem[]
 }
 
+// API 基址：Tauri 壳下后端跑在壳分配的随机端口上（invoke 读取）；浏览器/Vite 走相对路径（Vite 代理）。
+let baseCache: string | null = null
+
+async function apiBase(): Promise<string> {
+  if (baseCache !== null) return baseCache
+  if (!('__TAURI_INTERNALS__' in window)) {
+    baseCache = ''
+    return baseCache
+  }
+  const { invoke } = await import('@tauri-apps/api/core')
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const port = await invoke<number | null>('backend_port')
+    if (port) {
+      baseCache = `http://127.0.0.1:${port}`
+      return baseCache
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+  throw new Error('后端服务未就绪')
+}
+
+// 统一请求入口：所有 /api 调用都经它拼上基址
+async function api(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${await apiBase()}${path}`, init)
+}
+
+// 条目的图片地址：后端给的是相对路径，壳下要拼后端基址
+async function withImageBase<T extends { imageUrl: string | null }>(entry: T): Promise<T> {
+  const base = await apiBase()
+  return { ...entry, imageUrl: entry.imageUrl ? `${base}${entry.imageUrl}` : null }
+}
+
 export async function apiHealth(): Promise<boolean> {
-  const res = await fetch('/api/health')
+  const res = await api('/api/health')
   return res.ok
 }
 
 export async function fetchEntries(limit = 50, offset = 0): Promise<EntryItem[]> {
-  const res = await fetch(`/api/entries?limit=${limit}&offset=${offset}`)
+  const res = await api(`/api/entries?limit=${limit}&offset=${offset}`)
   if (!res.ok) throw new Error(`拉取日记失败：${res.status}`)
-  return res.json()
+  const entries: EntryItem[] = await res.json()
+  return Promise.all(entries.map(withImageBase))
 }
 
 export async function submitEntry(content: string, image: File | null): Promise<EntryItem> {
   const form = new FormData()
   form.append('content', content)
   if (image) form.append('image', image)
-  const res = await fetch('/api/entries', { method: 'POST', body: form })
+  const res = await api('/api/entries', { method: 'POST', body: form })
   if (!res.ok) {
     const detail = await res.json().catch(() => null)
     throw new Error(detail?.detail ?? '没有记下来，再试一次')
   }
-  return res.json()
+  return withImageBase(await res.json())
 }
 
 export async function updateEntry(entryId: number, content: string): Promise<EntryItem> {
-  const res = await fetch(`/api/entries/${entryId}`, {
+  const res = await api(`/api/entries/${entryId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
@@ -111,11 +144,11 @@ export async function updateEntry(entryId: number, content: string): Promise<Ent
     const detail = await res.json().catch(() => null)
     throw new Error(detail?.detail ?? '没有保存，再试一次')
   }
-  return res.json()
+  return withImageBase(await res.json())
 }
 
 export async function fetchModelSettings(): Promise<ModelSettings> {
-  const res = await fetch('/api/settings/model')
+  const res = await api('/api/settings/model')
   if (!res.ok) throw new Error(`读取配置失败：${res.status}`)
   return res.json()
 }
@@ -127,7 +160,7 @@ export async function saveModelSettings(
   temperature: number,
   reasoningEffort: string,
 ): Promise<void> {
-  const res = await fetch('/api/settings/model', {
+  const res = await api('/api/settings/model', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ baseUrl, modelName, apiKey, temperature, reasoningEffort }),
@@ -156,7 +189,7 @@ async function streamSse(res: Response, onEvent: (e: ChatStreamEvent) => void): 
 }
 
 export async function wakeChat(onEvent: (e: ChatStreamEvent) => void): Promise<void> {
-  const res = await fetch('/api/chat/wake', { method: 'POST' })
+  const res = await api('/api/chat/wake', { method: 'POST' })
   if (!res.ok) {
     const detail = await res.json().catch(() => null)
     throw new Error(detail?.detail ?? '唤醒失败')
@@ -169,7 +202,7 @@ export async function sendChatMessage(
   content: string,
   onEvent: (e: ChatStreamEvent) => void,
 ): Promise<void> {
-  const res = await fetch('/api/chat/messages', {
+  const res = await api('/api/chat/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sessionId, content }),
@@ -181,29 +214,29 @@ export async function sendChatMessage(
   await streamSse(res, onEvent)
 }
 
-export function openChatEvents(
+export async function openChatEvents(
   sessionId: string,
   onEvent: (e: { type: string; message?: ChatMessageItem }) => void,
-): EventSource {
-  const source = new EventSource(`/api/chat/events?sessionId=${sessionId}`)
+): Promise<EventSource> {
+  const source = new EventSource(`${await apiBase()}/api/chat/events?sessionId=${sessionId}`)
   source.onmessage = (e) => onEvent(JSON.parse(e.data))
   return source
 }
 
 export async function fetchChatHistory(sessionId: string, afterId = 0): Promise<ChatMessageItem[]> {
-  const res = await fetch(`/api/chat/history?sessionId=${sessionId}&afterId=${afterId}`)
+  const res = await api(`/api/chat/history?sessionId=${sessionId}&afterId=${afterId}`)
   if (!res.ok) throw new Error('拉取对话失败')
   return res.json()
 }
 
 export async function fetchChatSessions(): Promise<ChatSessionItem[]> {
-  const res = await fetch('/api/chat/sessions')
+  const res = await api('/api/chat/sessions')
   if (!res.ok) throw new Error('拉取会话失败')
   return res.json()
 }
 
 export async function fetchMemories(): Promise<MemoryItem[]> {
-  const res = await fetch('/api/memories')
+  const res = await api('/api/memories')
   if (!res.ok) throw new Error('拉取长期记忆失败')
   return res.json()
 }
@@ -212,7 +245,7 @@ export async function createMemory(
   category: 'basic' | 'psych',
   content: string,
 ): Promise<MemoryItem> {
-  const res = await fetch('/api/memories', {
+  const res = await api('/api/memories', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ category, content }),
@@ -225,7 +258,7 @@ export async function createMemory(
 }
 
 export async function updateMemory(memoryId: number, content: string): Promise<MemoryItem> {
-  const res = await fetch(`/api/memories/${memoryId}`, {
+  const res = await api(`/api/memories/${memoryId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
@@ -238,18 +271,23 @@ export async function updateMemory(memoryId: number, content: string): Promise<M
 }
 
 export async function deleteMemory(memoryId: number): Promise<void> {
-  const res = await fetch(`/api/memories/${memoryId}`, { method: 'DELETE' })
+  const res = await api(`/api/memories/${memoryId}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('没有删掉，再试一次')
 }
 
 export async function fetchDiaryDays(limit = 20, offset = 0): Promise<DiaryDayItem[]> {
-  const res = await fetch(`/api/diaries?limit=${limit}&offset=${offset}`)
+  const res = await api(`/api/diaries?limit=${limit}&offset=${offset}`)
   if (!res.ok) throw new Error('拉取历史失败')
   return res.json()
 }
 
 export async function fetchDayDetail(day: string): Promise<DiaryDayDetail> {
-  const res = await fetch(`/api/diaries/${day}`)
+  const res = await api(`/api/diaries/${day}`)
   if (!res.ok) throw new Error('拉取这天的日记失败')
-  return res.json()
+  const detail: DiaryDayDetail = await res.json()
+  const [digest, entries] = await Promise.all([
+    detail.digest ? withImageBase(detail.digest) : Promise.resolve(null),
+    Promise.all(detail.entries.map(withImageBase)),
+  ])
+  return { ...detail, digest, entries }
 }
