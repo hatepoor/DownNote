@@ -41,3 +41,4 @@
 7. build.py 子进程的 PATH 不含 `~/.cargo/bin`，需自行补（`os.environ["PATH"] += ...`）。
 8. **无控制台启动时 stdout/stderr 为 None**：双击运行（无控制台可继承）时 PyInstaller 的 `sys.stdout/stderr` 是 None，uvicorn 日志格式化器做 isatty() 彩色检测直接崩（`'NoneType' object has no attribute 'isatty'`，弹 Unhandled Exception 框）——`serve.py` 在 import uvicorn 前给 None 的 stdout/stderr 挂 `os.devnull`。**冒烟必须用分离启动复现**（PowerShell `Start-Process`），从终端启动有 stdout 继承、这个坑暴露不出来。
 9. **窗口缩放不触发分栏宽度钳制**：`diaryWidth` 只在拖动与挂载时钳制——大窗（最大化）下拖出的宽度存进 localStorage 后，还原小窗时对话栏（`min-width:0`）被整根压没。App.vue 监听 `window resize` 重新钳制（公式含窄栏 64 + 分栏命中区 9 + 对话栏最小 360）。
+10. **壳内页面对本地后端是跨源的**：Tauri 页面源为 `http(s)://tauri.localhost`，向 `127.0.0.1:<port>` 的 fetch/EventSource 全是跨源请求——GET 简单请求尚可通过，PUT/自定义头会先发 OPTIONS 预检，后端没有 CORS 中间件时预检 405，页面表现为 "Failed to fetch"（读取正常、保存失败）。修法 = app.py 挂 `CORSMiddleware`（放行 `http(s)://tauri.localhost` 与开发源 `127.0.0.1:5173`）。**冒烟要模拟预检**：`curl -X OPTIONS` 带 Origin + Access-Control-Request-Method。
