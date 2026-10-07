@@ -209,7 +209,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDo
   margin: 0;
   padding: 4px 0;
   list-style: none;
-  background: var(--bg-surface);
+  background: var(--bg-sheet);
   border: 1px solid var(--accent);
   border-radius: var(--radius-overlay);
   box-shadow: 0 16px 48px -8px var(--shadow-dialog);

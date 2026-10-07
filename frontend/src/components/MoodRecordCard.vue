@@ -17,7 +17,7 @@ defineProps<{ mood: MoodItem }>()
       {{ label }}
     </span>
     <span class="dots" :aria-label="`情绪强度 ${mood.intensity} / 10`">
-      {{ '●'.repeat(mood.intensity) + '○'.repeat(10 - mood.intensity) }}
+      <span class="on">{{ '●'.repeat(mood.intensity) }}</span><span class="off">{{ '○'.repeat(10 - mood.intensity) }}</span>
     </span>
   </div>
   <p v-if="mood.summary" class="summary">——{{ mood.summary }}</p>

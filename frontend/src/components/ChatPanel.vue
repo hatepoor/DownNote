@@ -155,7 +155,7 @@ onUnmounted(() => eventSource?.close())
 <template>
   <section class="panel-chat">
     <header class="c-head">
-      <h2>对话</h2>
+      <h2><span class="presence" aria-hidden="true"></span>对话</h2>
       <div class="c-btns">
         <button class="btn-ghost" @click="historyOpen = true">历史会话</button>
         <button class="btn-outline" :disabled="degraded || streaming" @click="wake">新的唤醒</button>

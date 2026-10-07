@@ -9,13 +9,18 @@
 :root {
   /* 原生部件（数字微调箭头等）跟随纸色，避免夜间发白 */
   color-scheme: light;
-  --bg-page: #faf9f5;
-  --bg-surface: #faf9f5;
-  --bg-inset: #f1efe9;
+  --bg-page: #f5f3ec;
+  --bg-sheet: #fdfcf8;
+  --bg-companion: #efebe2;
+  --bg-inset: #eae7de;
+  --margin-line: rgba(194, 64, 42, 0.18);
+  --sheet-shadow: 0 1px 2px rgba(28, 27, 24, 0.05), 0 16px 40px -24px rgba(28, 27, 24, 0.24);
+  --grain-op: 0.85;
+  --grain-blend: multiply;
   --ink-1: #1c1b18;
   --ink-2: #6e6a61;
-  --ink-3: #94908a;
-  --hairline: #cec7b6;
+  --ink-3: #8e8a84;
+  --hairline: #c9c2b0;
   --hairline-strong: #b5ac97;
   --accent: #c2402a;
   --accent-hover: #a83422;
@@ -71,8 +76,13 @@
 [data-theme='dark'] {
   color-scheme: dark;
   --bg-page: #1c1b18;
-  --bg-surface: #232220;
-  --bg-inset: #171614;
+  --bg-sheet: #262522;
+  --bg-companion: #21201c;
+  --bg-inset: #131211;
+  --margin-line: rgba(210, 74, 50, 0.28);
+  --sheet-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -24px rgba(0, 0, 0, 0.65);
+  --grain-op: 0.8;
+  --grain-blend: screen;
   --ink-1: #edeae2;
   --ink-2: #a8a499;
   --ink-3: #6e6a61;
@@ -184,6 +194,17 @@ button:focus-visible {
   }
 }
 
+/* 纸纹：整屏一张纸的物理颗粒（02 §3.5，衬在产品内容之上，与浮层同属纸面） */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: var(--grain-op);
+  mix-blend-mode: var(--grain-blend);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='.12'/%3E%3C/svg%3E");
+}
+
 /* ---- 应用骨架：标题栏（壳下才显示）+ 窄栏 + 面板 ---- */
 .app-shell {
   display: flex;
@@ -272,14 +293,13 @@ button:focus-visible {
   display: flex;
 }
 .views-workbench .panel-diary {
-  width: var(--diary-width, 472px);
+  width: var(--diary-width, 504px);
 }
 
-/* ---- 拖拽分栏（按住左右拖调整日记宽度，双击复位） ---- */
+/* ---- 拖拽分栏（按住左右拖调整日记宽度，双击复位）：命中区 9px，可见线 1px 居中 ---- */
 .sash {
   flex: none;
-  width: 6px;
-  margin: 0 -3px;
+  width: 9px;
   cursor: col-resize;
   position: relative;
   z-index: 2;
@@ -289,37 +309,14 @@ button:focus-visible {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 3px;
+  left: 50%;
   width: 1px;
-  background: transparent;
+  margin-left: -0.5px;
+  background: var(--hairline);
   transition: background 0.15s ease-out;
 }
 .sash:hover::after,
 .sash:active::after {
-  background: var(--accent);
-}
-
-/* 横向分隔栏（日记面板内：编辑器与"今天已写"之间） */
-.sash-h {
-  flex: none;
-  height: 6px;
-  margin: -3px 0;
-  cursor: row-resize;
-  position: relative;
-  z-index: 2;
-}
-.sash-h::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 3px;
-  height: 1px;
-  background: transparent;
-  transition: background 0.15s ease-out;
-}
-.sash-h:hover::after,
-.sash-h:active::after {
   background: var(--accent);
 }
 
@@ -342,58 +339,78 @@ button:focus-visible {
 
 /* ---- 当天日记面板（左） ---- */
 .panel-diary {
-  width: 472px;
+  width: 504px;
   flex: none;
   border-right: 1px solid var(--hairline);
-  padding: 26px 30px 20px;
+  padding: 30px 24px 20px;
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: 26px;
   overflow: hidden;
 }
 .p-head {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  border-bottom: 2px solid var(--ink-1);
-  padding-bottom: 12px;
+  padding-bottom: 14px;
 }
+/* 面板头的墨线向右收梢渐隐——信笺页眉的那道线不会横贯到底 */
+.p-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--ink-1) 0%,
+    var(--ink-1) 76%,
+    transparent 100%
+  );
+}
+/* 日记面板标题 27px vs 对话面板 16px——这 11px 的落差就是「记录永远第一」 */
 .p-head h1 {
   font-family: var(--serif);
-  font-size: 22px;
+  font-size: 27px;
   font-weight: 600;
-  letter-spacing: 4px;
+  letter-spacing: 5px;
 }
 .p-head time {
   font-family: var(--mono);
-  font-size: var(--fs-meta);
-  color: var(--ink-2);
-  letter-spacing: 1px;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 2px;
 }
-/* 编辑器区域：高度可拖（面板内分隔栏），文字超出时输入框内部滚动 */
-.editor-area {
-  height: var(--editor-height, 300px);
+/* 书写区＝信笺卡（02 §3.5）：一张纸放在桌面上——边框＋微阴影＋左侧页边线 */
+.sheet {
+  position: relative;
   flex: none;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+  background: var(--bg-sheet);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--sheet-shadow);
+  padding: 24px 22px 16px;
+  transition: border-color 320ms ease-out;
 }
-.editor-wrap {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.sheet::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 22px;
+  width: 1px;
+  background: var(--margin-line);
 }
-.editor {
-  flex: 1;
-  min-height: 0;
-  display: flex;
+.sheet:focus-within {
+  border-color: var(--hairline-strong);
 }
-.editor textarea {
+.sheet textarea {
+  display: block;
   width: 100%;
-  flex: 1;
-  min-height: 0;
+  min-height: 186px;
+  max-height: 42vh;
   overflow-y: auto;
   background: transparent;
   border: none;
@@ -401,59 +418,147 @@ button:focus-visible {
   resize: none;
   font-family: var(--serif);
   font-size: var(--fs-entry);
-  line-height: 1.9;
+  line-height: 2.1;
   color: var(--ink-1);
-  padding-top: 8px;
-  box-shadow: 0 2px 0 0 transparent;
-  transition: box-shadow 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0 0 0 18px;
 }
-.editor textarea::placeholder {
+.sheet textarea::placeholder {
   font-family: var(--serif);
   font-size: 17px;
   letter-spacing: 1.5px;
   color: var(--ink-3);
 }
-.editor textarea:focus {
-  box-shadow: 0 2px 0 0 var(--accent);
+/* 贴图与提交收在卡片内部（底部分隔线之下），卡片即完整的书写单元 */
+.sheet-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px 0 0 18px;
+  border-top: 1px solid var(--hairline);
 }
-.attach {
-  font-size: var(--fs-caption);
+.attach-slot {
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+}
+.attach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
   color: var(--ink-2);
   letter-spacing: 1px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+.attach-btn input {
+  display: none;
+}
+.attach-btn:hover {
+  color: var(--ink-1);
+  border-color: var(--hairline-strong);
+}
+.attach-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.attach-preview img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  display: block;
+  border: 1px solid var(--hairline);
+}
+.attach-preview .name {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attach-preview .remove {
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  font-size: 11px;
+  background: var(--bg-sheet);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.attach-preview .remove:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.sheet-error {
+  padding: 8px 0 0 18px;
 }
 .submit-row {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 18px;
-  border-bottom: 1px solid var(--hairline);
-  padding-bottom: 16px;
+  gap: 8px;
 }
 .btn-zhu {
-  background: var(--accent-fill);
+  background: var(--accent);
   color: var(--on-accent);
-  font-size: var(--fs-helper);
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 4px;
-  padding: 8px 27px;
-  border: 1px solid transparent;
+  padding: 9px 28px;
   border-radius: var(--radius);
+  min-width: 132px;
+  text-align: center;
+  transition:
+    background-color 150ms ease-out,
+    transform 120ms ease-out;
 }
 .btn-zhu:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
+  background: var(--accent-hover);
 }
+.btn-zhu:active:not(:disabled) {
+  transform: translateY(1px);
+}
+/* 空内容禁用态 = 未填墨的铅字框（inset 描边不挤布局） */
 .btn-zhu:disabled {
   background: transparent;
-  border-color: var(--hairline-strong);
   color: var(--ink-3);
-  cursor: not-allowed;
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  cursor: default;
 }
+.btn-zhu:disabled:hover {
+  background: transparent;
+}
+/* 区块标记：一枚 4px 朱砂方点，给区块一个结构锚位 */
 .cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 3px;
-  color: var(--ink-2);
-  margin-top: 4px;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+.cap::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  flex: none;
+  background: var(--accent);
 }
 .error-text {
   font-size: var(--fs-caption);
@@ -479,14 +584,15 @@ button:focus-visible {
   gap: 14px;
 }
 
-/* ---- 条目（今天已写 / 历史抽屉共用，规则线无卡片） ---- */
+/* ---- 条目（今天已写 / 历史抽屉 / 日页共用，规则线无卡片） ---- */
 .entry {
-  border-top: 1px solid var(--hairline);
-  border-bottom: 1px solid var(--hairline);
-  padding: 14px 0 13px;
+  padding: 16px 0 15px;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 10px;
+}
+.entry + .entry {
+  border-top: 1px solid var(--hairline);
 }
 .entry time {
   font-family: var(--mono);
@@ -497,7 +603,7 @@ button:focus-visible {
 .entry .body {
   font-family: var(--serif);
   font-size: var(--fs-entry);
-  line-height: 1.9;
+  line-height: 2.05;
   white-space: pre-wrap;
 }
 .entry .thumb {
@@ -547,7 +653,7 @@ button:focus-visible {
   bottom: 0;
   left: 64px;
   width: 340px;
-  background: var(--bg-page);
+  background: var(--bg-sheet);
   z-index: 30;
   border-right: 1px solid var(--hairline);
   box-shadow: 12px 0 32px -4px var(--shadow-soft);
@@ -647,19 +753,59 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  background: var(--bg-companion);
 }
 .c-head {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 17px 26px;
-  border-bottom: 1px solid var(--hairline);
+}
+/* 面板头的规则线向右收梢渐隐 */
+.c-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--hairline) 0%,
+    var(--hairline) 76%,
+    transparent 100%
+  );
 }
 .c-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-family: var(--serif);
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 4px;
+}
+/* 在场信号：它在。全站唯一的呼吸灯，与光标呼吸同源（02 §4.4） */
+.presence {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  animation: presenceBreath 3400ms ease-in-out infinite;
+}
+@keyframes presenceBreath {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.78);
+  }
 }
 .c-btns {
   display: flex;
@@ -667,20 +813,29 @@ button:focus-visible {
   gap: 14px;
 }
 .btn-ghost {
-  font-size: var(--fs-caption);
+  font-size: 12px;
   color: var(--ink-2);
   letter-spacing: 1px;
+  padding: 4px 1px;
+  border-bottom: 1px solid transparent;
+  transition:
+    color 150ms ease-out,
+    border-color 150ms ease-out;
 }
 .btn-ghost:hover {
   color: var(--ink-1);
+  border-bottom-color: var(--hairline-strong);
 }
 .btn-outline {
-  border: 1px solid var(--ink-1);
+  border: 1px solid var(--hairline-strong);
   color: var(--ink-1);
-  font-size: var(--fs-caption);
+  font-size: 12px;
   letter-spacing: 2px;
   padding: 6px 15px;
   border-radius: var(--radius);
+  transition:
+    border-color 150ms ease-out,
+    color 150ms ease-out;
 }
 .btn-outline:hover {
   border-color: var(--accent);
@@ -688,10 +843,10 @@ button:focus-visible {
 }
 .msgs {
   flex: 1;
-  padding: 22px 28px;
+  padding: 26px 28px 22px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
   overflow-y: auto;
 }
 .chat-empty {
@@ -711,15 +866,30 @@ button:focus-visible {
   color: var(--ink-3);
 }
 .input {
+  position: relative;
   display: flex;
   gap: 12px;
   padding: 14px 26px;
-  border-top: 1px solid var(--hairline);
   align-items: center;
+}
+/* 输入区上缘的规则线同样向右收梢渐隐 */
+.input::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--hairline) 0%,
+    var(--hairline) 76%,
+    transparent 100%
+  );
 }
 .box {
   flex: 1;
-  border: 1px solid var(--ink-1);
+  border: 1px solid var(--hairline-strong);
   border-radius: var(--radius);
   padding: 11px 16px;
   font-family: var(--sans);
@@ -743,17 +913,22 @@ button:focus-visible {
   cursor: not-allowed;
 }
 .btn-send {
-  background: var(--accent-fill);
+  background: var(--accent);
   color: var(--on-accent);
-  font-size: var(--fs-helper);
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 3px;
-  padding: 9px 26px;
-  border: 1px solid transparent;
+  padding: 10px 27px;
   border-radius: var(--radius);
+  transition:
+    background-color 150ms ease-out,
+    transform 120ms ease-out;
 }
 .btn-send:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
+  background: var(--accent-hover);
+}
+.btn-send:active:not(:disabled) {
+  transform: translateY(1px);
 }
 .btn-send:disabled {
   background: transparent;
@@ -798,7 +973,7 @@ button:focus-visible {
 }
 .dialog {
   width: 460px;
-  background: var(--bg-page);
+  background: var(--bg-sheet);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-overlay);
   box-shadow: 0 16px 48px -8px var(--shadow-dialog);
@@ -900,7 +1075,7 @@ button:focus-visible {
 .msg-agent .md-body li {
   font-family: var(--serif);
   font-size: var(--fs-entry);
-  line-height: 1.9;
+  line-height: 2.05;
 }
 /* ---- Markdown 渲染（12-体验修订：Agent 少量 Markdown，按信笺铅字风格） ---- */
 .md-body > * + * {
@@ -974,16 +1149,19 @@ button:focus-visible {
   border: 1px solid var(--hairline);
   padding: 4px 10px;
 }
+/* 用户气泡缺右下角，指向自己——方向感来自圆角而非尾巴。
+   1px 朱砂描边是必须的：气泡底色与压深后的对话栏亮度只差 1.02:1，光靠底色立不住 */
 .msg-user {
   align-self: flex-end;
   background: var(--accent-soft);
+  border: 1px solid var(--margin-line);
   padding: 10px 16px;
   max-width: 68%;
-  border-radius: var(--radius);
+  border-radius: 2px 2px 0 2px;
 }
 .msg-user p {
   font-size: var(--fs-body);
-  line-height: 1.8;
+  line-height: 1.85;
   white-space: pre-wrap;
 }
 .md-body.streaming > :last-child::after,
@@ -1244,13 +1422,20 @@ button:focus-visible {
 }
 .dots {
   font-family: var(--serif);
-  font-size: 10px;
-  letter-spacing: 3px;
-  color: var(--ink-1);
+  font-size: 11px;
+  letter-spacing: 0;
+  line-height: 1;
+  display: inline-flex;
+}
+.dots .on {
+  color: var(--ink-2);
+}
+.dots .off {
+  color: var(--hairline-strong);
 }
 .summary {
   font-family: var(--serif);
-  font-size: var(--fs-summary);
+  font-size: 13px;
   color: var(--ink-2);
 }
 

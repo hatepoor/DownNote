@@ -12,9 +12,9 @@ import TitleBar from './components/TitleBar.vue'
 import { bindTitlebarSync, currentView, isTauri, refreshConfig, switchView, theme, toggleTheme } from './stores/appState'
 import { todayString } from './utils/time'
 
-const DIARY_WIDTH_DEFAULT = 472
-const DIARY_WIDTH_MIN = 320
-const CHAT_WIDTH_MIN = 400
+const DIARY_WIDTH_DEFAULT = 504
+const DIARY_WIDTH_MIN = 340
+const CHAT_WIDTH_MIN = 360
 const DIARY_WIDTH_KEY = 'down-note:diary-width'
 
 const drawerOpen = ref(false)
@@ -87,6 +87,7 @@ onMounted(() => {
 <template>
   <div class="app-shell">
     <TitleBar v-if="isTauri" />
+    <div class="grain" aria-hidden="true"></div>
     <div class="app">
       <aside class="rail">
         <div class="seal">低</div>

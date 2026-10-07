@@ -13,10 +13,6 @@ import ImageLightbox from './ImageLightbox.vue'
 import MoodRecordCard from './MoodRecordCard.vue'
 import TodayEntryCard from './TodayEntryCard.vue'
 
-const EDITOR_HEIGHT_DEFAULT = 300
-const EDITOR_HEIGHT_MIN = 160
-const EDITOR_HEIGHT_KEY = 'down-note:editor-height'
-
 const props = defineProps<{ day: string | null }>()
 const emit = defineEmits<{ back: [] }>()
 
@@ -37,41 +33,7 @@ const dayDetail = ref<DiaryDayDetail | null>(null)
 const dayError = ref('')
 const lightboxUrl = ref('')
 
-const editorHeight = ref(EDITOR_HEIGHT_DEFAULT)
 const editingEntry = ref<EntryItem | null>(null) // 非空 = 主编辑器正在修改这条
-let editorDragStartY = 0
-let editorDragStartHeight = 0
-
-function clampEditorHeight(height: number): number {
-  const maxHeight = Math.max(EDITOR_HEIGHT_MIN, Math.round(window.innerHeight * 0.66))
-  return Math.min(Math.max(height, EDITOR_HEIGHT_MIN), maxHeight)
-}
-
-function onEditorDragMove(event: MouseEvent): void {
-  editorHeight.value = clampEditorHeight(
-    editorDragStartHeight + event.clientY - editorDragStartY,
-  )
-}
-
-function stopEditorDrag(): void {
-  document.removeEventListener('mousemove', onEditorDragMove)
-  document.removeEventListener('mouseup', stopEditorDrag)
-  document.body.style.userSelect = ''
-  localStorage.setItem(EDITOR_HEIGHT_KEY, String(editorHeight.value))
-}
-
-function startEditorDrag(event: MouseEvent): void {
-  editorDragStartY = event.clientY
-  editorDragStartHeight = editorHeight.value
-  document.addEventListener('mousemove', onEditorDragMove)
-  document.addEventListener('mouseup', stopEditorDrag)
-  document.body.style.userSelect = 'none'
-}
-
-function resetEditorHeight(): void {
-  editorHeight.value = clampEditorHeight(EDITOR_HEIGHT_DEFAULT)
-  localStorage.setItem(EDITOR_HEIGHT_KEY, String(editorHeight.value))
-}
 
 async function refresh(): Promise<void> {
   const next = await fetchEntries(50)
@@ -124,8 +86,6 @@ watch(
 onMounted(() => {
   refresh()
   if (props.day !== null) loadDay(props.day)
-  const saved = Number(localStorage.getItem(EDITOR_HEIGHT_KEY))
-  if (saved) editorHeight.value = clampEditorHeight(saved)
 })
 </script>
 
@@ -136,20 +96,11 @@ onMounted(() => {
         <h1>今天</h1>
         <time>{{ formatPanelDate() }}</time>
       </header>
-      <div class="editor-area" :style="{ '--editor-height': `${editorHeight}px` }">
-        <DiaryEditor
-          :edit-entry="editingEntry"
-          @submitted="refreshSoon"
-          @edit-done="onEditDone"
-          @edit-cancel="editingEntry = null"
-        />
-      </div>
-      <div
-        class="sash sash-h"
-        role="separator"
-        aria-label="拖动调整编辑器高度"
-        @mousedown.prevent="startEditorDrag"
-        @dblclick="resetEditorHeight"
+      <DiaryEditor
+        :edit-entry="editingEntry"
+        @submitted="refreshSoon"
+        @edit-done="onEditDone"
+        @edit-cancel="editingEntry = null"
       />
       <template v-if="todayEntries.length > 0">
         <p class="cap">今天已写</p>
@@ -203,11 +154,27 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* 今天已写：区块顶线向右收梢渐隐（条目之间的分隔仍是实线） */
 .today-list {
+  position: relative;
+  padding-top: 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+}
+.today-list::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--hairline) 0%,
+    var(--hairline) 76%,
+    transparent 100%
+  );
 }
 .day-scroll {
   flex: 1;
@@ -215,7 +182,7 @@ onMounted(() => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: 26px;
 }
 .day-diary {
   display: flex;

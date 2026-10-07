@@ -89,48 +89,38 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <div class="editor-wrap">
-    <div class="editor">
-      <textarea
-        ref="textareaEl"
-        v-model="content"
-        :placeholder="isEditing ? '' : '此刻的心情，写下来吧'"
-      />
+  <!-- 信笺卡（02 §3.5 轮次03）：一张纸放在桌面上——贴图与提交收进卡内 -->
+  <div class="sheet">
+    <textarea
+      ref="textareaEl"
+      v-model="content"
+      :placeholder="isEditing ? '' : '此刻的心情，写下来吧'"
+    />
+    <div class="sheet-foot">
+      <div class="attach-slot">
+        <p v-if="isEditing" class="edit-hint">正在修改 {{ editingClock }} 写下的那条日记</p>
+        <label v-else-if="!imageFile" class="attach-btn">
+          ＋ 贴图
+          <input type="file" accept="image/jpeg,image/png" @change="onImageChange" />
+        </label>
+        <div v-else class="attach-preview">
+          <img :src="imagePreview" alt="贴图预览" />
+          <span class="name">{{ imageFile.name }}</span>
+          <button class="remove" aria-label="移除贴图" @click="removeImage">✕</button>
+        </div>
+      </div>
+      <div class="submit-row">
+        <button v-if="isEditing" class="btn-cancel" @click="cancelEdit">取消</button>
+        <button
+          class="btn-zhu"
+          :disabled="submitting || (!content.trim() && !isEditing && !imageFile)"
+          @click="submit"
+        >
+          <template v-if="isEditing">{{ submitting ? '保存中…' : '保存修改' }}</template>
+          <template v-else>{{ submitting ? '记录中…' : '记录今天' }}</template>
+        </button>
+      </div>
     </div>
-    <p v-if="isEditing" class="edit-hint">正在修改 {{ editingClock }} 写下的那条日记</p>
-    <label v-else-if="!imageFile" class="attach attach-btn">
-      ＋ 贴图
-      <input type="file" accept="image/jpeg,image/png" @change="onImageChange" />
-    </label>
-    <div v-else class="attach-preview">
-      <img :src="imagePreview" alt="贴图预览" />
-      <span class="name">{{ imageFile.name }}</span>
-      <button class="remove" aria-label="移除贴图" @click="removeImage">✕</button>
-    </div>
-    <div class="submit-row">
-      <button v-if="isEditing" class="btn-ghost" @click="cancelEdit">取消</button>
-      <button
-        class="btn-zhu"
-        :disabled="submitting || (!content.trim() && !isEditing && !imageFile)"
-        @click="submit"
-      >
-        <template v-if="isEditing">{{ submitting ? '保存中…' : '保存修改' }}</template>
-        <template v-else>{{ submitting ? '记录中…' : '记录今天' }}</template>
-      </button>
-    </div>
-    <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
+    <p v-if="errorMessage" class="error-text sheet-error">{{ errorMessage }}</p>
   </div>
 </template>
-
-<style scoped>
-.attach-btn {
-  display: inline-block;
-  cursor: pointer;
-}
-.attach-btn input {
-  display: none;
-}
-.attach-btn:hover {
-  color: var(--ink-1);
-}
-</style>
