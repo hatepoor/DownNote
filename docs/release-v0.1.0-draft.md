@@ -1,7 +1,10 @@
 # 低落日记 v0.1.0 · Release 说明（草稿）
 
-> 附件：`down_note-v0.1.0-win64.zip`（约 34MB；Windows 10/11 64 位）
-> 产物由 `scripts/build.py` 一键构建（PyInstaller onedir），目录内含《使用说明.txt》。
+> 附件二选一：
+> - `down_note-v0.1.0-setup.exe`（约 32MB）——**安装版**，带中文向导：选安装位置、可选桌面快捷方式、带卸载器
+> - `down_note-v0.1.0-win64.zip`（约 34MB）——绿色版，解压双击 `down_note.exe` 即用（目录内含《使用说明.txt》）
+>
+> 两者都是 Windows 10/11 64 位；卸载或删除都不会动你的日记数据。
 
 ## 这是什么
 
