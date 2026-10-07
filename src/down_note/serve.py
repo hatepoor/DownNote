@@ -7,6 +7,17 @@ PyInstaller 冻结环境里找不到未静态引用的模块。
 对应开发文档：docx/v0.1.0/modules/10-打包发布.md
 """
 
+import os
+import sys
+
+# 双击启动（无控制台）时 stdout/stderr 为 None，uvicorn 等库做 isatty()
+# 彩色检测会直接崩（'NoneType' object has no attribute 'isatty'）——
+# 先挂上空设备再继续。
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
 import uvicorn
 
 from down_note import config

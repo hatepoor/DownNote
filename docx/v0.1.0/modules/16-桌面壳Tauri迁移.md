@@ -39,3 +39,4 @@
 5. **MSYS 路径转换吃掉安装器开关**：Git Bash 里 `/S` 会被当 POSIX 路径改写，调用 Windows 安装器一律加 `MSYS_NO_PATHCONV=1` 前缀。
 6. `w.emit` 在 Tauri 2 需要 `use tauri::Emitter;`（emit 移入了 Emitter trait）。
 7. build.py 子进程的 PATH 不含 `~/.cargo/bin`，需自行补（`os.environ["PATH"] += ...`）。
+8. **无控制台启动时 stdout/stderr 为 None**：双击运行（无控制台可继承）时 PyInstaller 的 `sys.stdout/stderr` 是 None，uvicorn 日志格式化器做 isatty() 彩色检测直接崩（`'NoneType' object has no attribute 'isatty'`，弹 Unhandled Exception 框）——`serve.py` 在 import uvicorn 前给 None 的 stdout/stderr 挂 `os.devnull`。**冒烟必须用分离启动复现**（PowerShell `Start-Process`），从终端启动有 stdout 继承、这个坑暴露不出来。

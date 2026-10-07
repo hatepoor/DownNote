@@ -21,11 +21,11 @@
 <style>
 /* ============ Token · 信笺（浅，默认） ============ */
 :root{
-  --bg-page:#FAF9F5; --bg-sheet:#FFFDF9; --bg-companion:#F4F2EC; --bg-inset:#F1EFE9;
-  --margin-line:rgba(194,64,42,.16);
-  --sheet-shadow:0 1px 2px rgba(28,27,24,.04), 0 12px 34px -22px rgba(28,27,24,.16);
-  --ink-1:#1C1B18; --ink-2:#6E6A61; --ink-3:#94908A;
-  --hairline:#CEC7B6; --hairline-strong:#B5AC97;
+  --bg-page:#F5F3EC; --bg-sheet:#FDFCF8; --bg-companion:#EFEBE2; --bg-inset:#EAE7DE;
+  --margin-line:rgba(194,64,42,.18);
+  --sheet-shadow:0 1px 2px rgba(28,27,24,.05), 0 16px 40px -24px rgba(28,27,24,.24);
+  --ink-1:#1C1B18; --ink-2:#6E6A61; --ink-3:#8E8A84;
+  --hairline:#C9C2B0; --hairline-strong:#B5AC97;
   --accent:#C2402A; --accent-hover:#A83422; --accent-soft:#F5EAE4; --on-accent:#FAF9F5;
   --ok:#52705E; --banner-bg:#F1EFE9; --banner-ink:#6E6A61;
   --focus-ring:rgba(194,64,42,.4);
@@ -38,9 +38,9 @@
 }
 /* ============ Token · 夜笺（深） ============ */
 [data-theme="dark"]{
-  --bg-page:#1C1B18; --bg-sheet:#232220; --bg-companion:#201F1C; --bg-inset:#171614;
-  --margin-line:rgba(210,74,50,.26);
-  --sheet-shadow:0 1px 2px rgba(0,0,0,.34), 0 12px 34px -22px rgba(0,0,0,.55);
+  --bg-page:#1C1B18; --bg-sheet:#262522; --bg-companion:#21201C; --bg-inset:#131211;
+  --margin-line:rgba(210,74,50,.28);
+  --sheet-shadow:0 1px 2px rgba(0,0,0,.40), 0 16px 40px -24px rgba(0,0,0,.65);
   --ink-1:#EDEAE2; --ink-2:#A8A499; --ink-3:#6E6A61;
   --hairline:#423F38; --hairline-strong:#55514A;
   --accent:#D24A32; --accent-hover:#E05A40; --accent-soft:#3A231D; --on-accent:#FAF9F5;
@@ -62,7 +62,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   opacity:var(--grain-op);mix-blend-mode:var(--grain-blend);
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='.12'/%3E%3C/svg%3E")}
 /* ============ 骨架 ============ */
-.app{display:flex;height:100vh}
+.app{--diary-w:504px;display:flex;height:100vh}
 .rail{width:64px;flex:none;background:var(--bg-inset);border-right:1px solid var(--hairline);
   display:flex;flex-direction:column;align-items:center;padding:26px 0 20px;overflow:hidden}
 .seal{width:34px;height:34px;background:var(--accent);color:var(--on-accent);font-family:var(--serif);
@@ -75,23 +75,32 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .rail-item:hover{color:var(--accent-hover)}
 .rail-item.active{color:var(--accent)}
 .rail-spacer{flex:1}
+/* 两栏之间的分隔线：命中区 9px，可见线 1px 居中——细线好看但不好抓，命中区要宽 */
+.split{position:relative;flex:none;width:9px;cursor:col-resize;background:transparent}
+.split::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;margin-left:-.5px;
+  background:var(--hairline);transition:background-color 150ms ease-out}
+.split:hover::before,.split:focus-visible::before{background:var(--hairline-strong)}
+.split:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
+.app.is-resizing{cursor:col-resize;user-select:none}
+.app.is-resizing .split::before{background:var(--accent)}
 /* ============ 演示控件（不属产品界面） ============ */
 .demo{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;margin-top:26px}
 .demo-cap{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--ink-3);opacity:.7}
-.demo-label{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--ink-3);margin:14px 0 3px}
-.demo-btn{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink-3);width:44px;text-align:center;
+.demo-label{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--ink-2);margin:14px 0 3px}
+.demo-btn{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink-2);width:44px;text-align:center;
   padding:3px 0;border-bottom:1px solid transparent;transition:color 150ms ease-out,border-color 150ms ease-out}
-.demo-btn:hover{color:var(--ink-2)}
+.demo-btn:hover{color:var(--ink-1)}
 .demo-btn.on{color:var(--ink-1);border-bottom-color:var(--ink-1)}
 /* ============ 当天日记面板（左） ============ */
-.panel-diary{width:504px;flex:none;border-right:1px solid var(--hairline);padding:26px 24px 20px;
-  display:flex;flex-direction:column;gap:14px;overflow:hidden}
-.p-head{position:relative;display:flex;justify-content:space-between;align-items:baseline;padding-bottom:12px}
+.panel-diary{width:var(--diary-w);flex:none;padding:30px 24px 20px;
+  display:flex;flex-direction:column;gap:26px;overflow:hidden}
+.p-head{position:relative;display:flex;justify-content:space-between;align-items:baseline;padding-bottom:14px}
 /* 面板头的墨线向右收梢渐隐——信笺页眉的那道线不会横贯到底 */
 .p-head::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;
   background:linear-gradient(90deg,var(--ink-1) 0%,var(--ink-1) 76%,transparent 100%)}
-.p-head h1{font-family:var(--serif);font-size:22px;font-weight:600;letter-spacing:4px}
-.p-head time{font-family:var(--mono);font-size:11px;color:var(--ink-2);letter-spacing:1px}
+/* 日记面板标题 27px vs 对话面板 16px——这 11px 的落差就是「记录永远第一」 */
+.p-head h1{font-family:var(--serif);font-size:27px;font-weight:600;letter-spacing:5px}
+.p-head time{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:2px}
 /* 书写区＝信笺卡：一张纸放在桌面上。边框＋微阴影＋左侧页边线。
    全站唯一允许阴影的元素；圆角沿用全局 2px。见 02 §3.5 */
 .sheet{position:relative;flex:none;background:var(--bg-sheet);
@@ -130,11 +139,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .btn-zhu:disabled:hover{background:transparent}
 .btn-zhu:disabled:active{transform:none}
 /* 今天已写 */
-.today-list{position:relative;padding-top:15px;display:flex;flex-direction:column;gap:0;overflow-y:auto}
+.today-list{position:relative;padding-top:16px;display:flex;flex-direction:column;gap:0;overflow-y:auto}
 .today-list::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;
   background:linear-gradient(90deg,var(--hairline) 0%,var(--hairline) 76%,transparent 100%)}
-.cap{font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--ink-2);margin-bottom:2px}
-.entry{padding:14px 0 13px;display:flex;flex-direction:column;gap:9px}
+/* 区块标记：一枚 4px 朱砂方点，给「今天已写」一个结构锚位 */
+.cap{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--ink-3);margin-bottom:4px}
+.cap::before{content:"";width:4px;height:4px;flex:none;background:var(--accent)}
+.entry{padding:16px 0 15px;display:flex;flex-direction:column;gap:10px}
 .entry+.entry{border-top:1px solid var(--hairline)}
 .e-meta{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .e-meta time{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--ink-2)}
@@ -176,14 +187,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .btn-outline{border:1px solid var(--hairline-strong);color:var(--ink-1);font-size:12px;letter-spacing:2px;
   padding:6px 15px;border-radius:2px;transition:border-color 150ms ease-out,color 150ms ease-out}
 .btn-outline:hover{border-color:var(--accent);color:var(--accent)}
-.msgs{flex:1;padding:22px 28px;display:flex;flex-direction:column;gap:18px;overflow-y:auto}
+.msgs{flex:1;padding:26px 28px 22px;display:flex;flex-direction:column;gap:20px;overflow-y:auto}
 .wake{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--ink-2)}
 .msg-agent{border-left:2px solid var(--ink-1);padding-left:15px;max-width:78%}
 .msg-agent p{font-family:var(--serif);font-size:15px;line-height:2.05}
 .caret{display:inline-block;width:8px;height:15px;background:var(--accent);vertical-align:-2px;margin-left:5px;
   animation:caretBreath 1200ms ease-in-out infinite}
-/* 用户气泡缺右下角，指向自己——方向感来自圆角而非尾巴 */
-.msg-user{align-self:flex-end;background:var(--accent-soft);padding:10px 16px;max-width:68%;border-radius:2px 2px 0 2px}
+/* 用户气泡缺右下角，指向自己——方向感来自圆角而非尾巴。
+   1px 朱砂描边是必须的：气泡底色与压深后的对话栏亮度只差 1.02:1，光靠底色立不住 */
+.msg-user{align-self:flex-end;background:var(--accent-soft);border:1px solid var(--margin-line);
+  padding:10px 16px;max-width:68%;border-radius:2px 2px 0 2px}
 .msg-user p{font-size:14px;line-height:1.85}
 .input{position:relative;display:flex;gap:12px;padding:14px 26px;align-items:center}
 .input::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;
@@ -261,9 +274,13 @@ html[data-motion="ink"] .summary.analyzing{animation:breath 1900ms ease-in-out i
   <!-- 窄栏 -->
   <aside class="rail">
     <div class="seal">低</div>
-    <button class="rail-item active" id="btn-history">
+    <button class="rail-item" id="btn-history">
       <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
       <span>历史</span>
+    </button>
+    <button class="rail-item" id="btn-memory">
+      <svg viewBox="0 0 24 24"><path d="M20.3 8.9c0 4-8.3 9.7-8.3 9.7S3.7 12.9 3.7 8.9a4.4 4.4 0 0 1 8.3-2 4.4 4.4 0 0 1 8.3 2z"/></svg>
+      <span>记忆</span>
     </button>
 
     <!-- 演示控件（非产品界面） -->
@@ -327,6 +344,11 @@ html[data-motion="ink"] .summary.analyzing{animation:breath 1900ms ease-in-out i
       </article>
     </div>
   </section>
+
+  <!-- 两栏之间的分隔线：左右拖动调整宽度，双击复位（见 05 §3.10） -->
+  <div class="split" id="split" role="separator" aria-orientation="vertical"
+       aria-label="调整日记栏与对话栏的宽度" tabindex="0"
+       title="拖动调整宽度 · 双击复位"></div>
 
   <!-- 对话面板 -->
   <section class="panel-chat">
@@ -576,6 +598,52 @@ function openLightbox(src){ lightboxImg.src = src; lightbox.hidden = false; }
 function closeLightbox(){ lightbox.hidden = true; lightboxImg.removeAttribute('src'); }
 lightbox.addEventListener('click', closeLightbox);
 
+/* ---- 两栏分隔线：左右拖动，双击复位（05 §3.10） ---- */
+var app = document.querySelector('.app');
+var split = document.getElementById('split');
+var panelDiary = document.querySelector('.panel-diary');
+var DIARY_DEFAULT = 504, DIARY_MIN = 340, CHAT_MIN = 360;
+
+function clampDiary(w){
+  var room = app.clientWidth - 64 - split.offsetWidth;   // 扣掉窄栏与分隔线自身
+  return Math.max(DIARY_MIN, Math.min(w, room - CHAT_MIN));
+}
+function setDiary(w){ app.style.setProperty('--diary-w', clampDiary(w) + 'px'); }
+
+var dragFromX = 0, dragFromW = 0, dragging = false;
+
+split.addEventListener('pointerdown', function(e){
+  dragging = true;
+  dragFromX = e.clientX;
+  dragFromW = panelDiary.getBoundingClientRect().width;
+  app.classList.add('is-resizing');
+  // setPointerCapture 在 pointerId 无效时会抛 InvalidPointerId，包一层以免拖拽整体失效
+  try { if(split.setPointerCapture){ split.setPointerCapture(e.pointerId); } } catch(err){}
+  e.preventDefault();
+});
+split.addEventListener('pointermove', function(e){
+  if(!dragging){ return; }
+  setDiary(dragFromW + (e.clientX - dragFromX));
+});
+function endDrag(){ dragging = false; app.classList.remove('is-resizing'); }
+split.addEventListener('pointerup', endDrag);
+split.addEventListener('pointercancel', endDrag);
+split.addEventListener('dblclick', function(){ setDiary(DIARY_DEFAULT); });
+split.addEventListener('keydown', function(e){
+  if(e.key === 'ArrowLeft'){ setDiary(panelDiary.getBoundingClientRect().width - 24); e.preventDefault(); }
+  else if(e.key === 'ArrowRight'){ setDiary(panelDiary.getBoundingClientRect().width + 24); e.preventDefault(); }
+});
+window.addEventListener('resize', function(){ setDiary(panelDiary.getBoundingClientRect().width); });
+
+/* ---- 窄栏：历史 / 记忆 的选中态 ---- */
+var railButtons = [document.getElementById('btn-history'), document.getElementById('btn-memory')];
+function markRail(target){
+  railButtons.forEach(function(b){ b.classList.toggle('active', b === target); });
+}
+railButtons.forEach(function(btn){
+  btn.addEventListener('click', function(){ markRail(btn); });
+});
+
 /* ---- 历史日记抽屉 ---- */
 var drawer = document.getElementById('drawer');
 var drawerScrim = document.getElementById('drawer-scrim');
@@ -585,6 +653,7 @@ function openDrawer(){
 }
 function closeDrawer(){
   drawer.classList.remove('open'); drawerScrim.classList.remove('open');
+  railButtons.forEach(function(b){ b.classList.remove('active'); });   // 抽屉是浮层，关掉就不该继续高亮
   setTimeout(function(){ drawer.hidden = true; drawerScrim.hidden = true; }, 260);
 }
 document.getElementById('btn-history').addEventListener('click', function(){

@@ -60,4 +60,5 @@
 
 - 全部文档、注释、UI 文案使用中文。
 - 术语分界易错，不要混用：**心情记录** = 从日记条目提炼出的情绪数据；**性格画像** = 描述用户（可见、可改、可删）；**人格模板** = 定义 Agent 的陪伴风格。
-- 常用命令：测试 `uv run pytest`；启动应用（自动识别 dev/prod 页面来源）`uv run python -m down_note.main`；前端开发服务器在 `frontend/` 下 `npm run dev`；打包 `uv run python scripts/build.py`（产物 `dist/down_note/`，整目录压缩即为发布 zip；压缩前先关掉运行中的 exe）。
+- 常用命令：测试 `uv run pytest`；启动应用（自动识别 dev/prod 页面来源）`uv run python -m down_note.main`；前端开发服务器在 `frontend/` 下 `npm run dev`；打包 `uv run python scripts/build.py`（npm 构建 → 后端 sidecar → Tauri NSIS 安装包，产物在 `dist/`）。
+- git 与发布：**推送到 GitHub、创建/修改 Release 前必须征得用户同意**；本地 commit 不受限。远程走 HTTPS（`https://github.com/hatepoor/DownNote.git`，凭据管理器令牌自动生效）。
