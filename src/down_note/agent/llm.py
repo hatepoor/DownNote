@@ -6,7 +6,10 @@ ModelConfigError / ModelUnavailableError 属可降级错误，业务层捕获后
 兼容性已知问题（2026-10-06 实测）：部分推理模型（deepseek v4.1 flash）在
 惩罚参数 + 触发深度思考时会返回空内容——invokeModel/streamModel 对空回复
 自动去掉惩罚参数重试一次。
-对应开发文档：docx/v0.1.0/modules/03-模型接口.md
+生成参数分两档（profile，2026-10-08 定）：chat 档跟随用户设置（陪伴对话）；
+analysis 档固定——不开启思考、温度 0.8、800 预算、无惩罚参数、超时与重试收紧，
+用于心情分析、危机复判等小输出判断任务。
+对应开发文档：docx/v0.1.0/modules/03-模型接口.md、docx/v0.1.2/modules/02-分析提速.md
 """
 
 import base64
@@ -37,6 +40,19 @@ GENERATION_MAX_TOKENS = 5000
 # 用户拍板 800→2000→5000）。
 # 思考强度走配置（reasoning_effort，OpenAI 格式）："low" 压缩思考长度，空串则不传该参数
 
+# analysis 档：心情分析 / 危机复判等小输出判断任务——不开启思考（正文仅约 200 token 的
+# JSON），预算收紧、失败快进快出。2026-10-08 目标端点实测：只有 reasoning_effort="none"
+# 与 thinking.type=disabled 能真正关掉思考（不传参数 / "minimal" / enable_thinking=false
+# 都仍产生思考 token）；温度 0.8 是 0.3/0.6/0.8/1.0 实测后定——0.3 措辞重复僵硬
+# （三次里两次逐字相同），0.8 措辞自然、标签与强度稳定、JSON 全合法。
+PROFILE_CHAT = "chat"
+PROFILE_ANALYSIS = "analysis"
+ANALYSIS_TEMPERATURE = 0.8
+ANALYSIS_MAX_TOKENS = 800
+ANALYSIS_REASONING_EFFORT = "none"
+ANALYSIS_TIMEOUT_SECONDS = 30.0
+ANALYSIS_SDK_MAX_RETRIES = 2
+
 # SDK 层瞬态错误（连接/超时/5xx/限流）自动重试上限；输出质量重试归业务层
 SDK_MAX_RETRIES = 5
 
@@ -55,24 +71,35 @@ def ensureConfigured(cfg: "ModelServiceConfig") -> None:
         raise ModelConfigError(f"模型服务未配置，缺少：{', '.join(missing)}")
 
 
-def buildChatModel(cfg: "ModelServiceConfig", *, timeout: float = REQUEST_TIMEOUT_SECONDS, withPenalties: bool = True) -> BaseChatModel:
+def buildChatModel(
+        cfg: "ModelServiceConfig",
+        *,
+        timeout: float | None = None,
+        withPenalties: bool = True,
+        profile: str = PROFILE_CHAT,
+    ) -> BaseChatModel:
     """三件套 → ChatOpenAI 实例。全系统模型实例的唯一来源。
 
-    withPenalties=False 用于空回复兜底重试（见模块 docstring 的兼容性说明）。
+    profile 决定生成参数档位：chat（默认）跟随用户设置；analysis 固定（见模块 docstring）。
+    timeout 显式传入时优先于档位默认值；withPenalties=False 用于空回复兜底重试。
     """
     ensureConfigured(cfg)
+    analysis = profile == PROFILE_ANALYSIS
+    defaultTimeout = ANALYSIS_TIMEOUT_SECONDS if analysis else REQUEST_TIMEOUT_SECONDS
     params: dict = {
             "model": cfg.modelName,
             "api_key": cfg.apiKey or "EMPTY",
             "base_url": cfg.baseUrl,
-            "timeout": timeout,
-            "max_retries": SDK_MAX_RETRIES,
-            "max_tokens": GENERATION_MAX_TOKENS,
-            "temperature": cfg.temperature,
+            "timeout": timeout if timeout is not None else defaultTimeout,
+            "max_retries": ANALYSIS_SDK_MAX_RETRIES if analysis else SDK_MAX_RETRIES,
+            "max_tokens": ANALYSIS_MAX_TOKENS if analysis else GENERATION_MAX_TOKENS,
+            "temperature": ANALYSIS_TEMPERATURE if analysis else cfg.temperature,
         }
-    if cfg.reasoningEffort:
+    if analysis:
+        params["reasoning_effort"] = ANALYSIS_REASONING_EFFORT
+    elif cfg.reasoningEffort:
         params["reasoning_effort"] = cfg.reasoningEffort
-    if withPenalties:
+    if withPenalties and not analysis:
         params.update(
                 top_p=GENERATION_TOP_P,
                 presence_penalty=GENERATION_PRESENCE_PENALTY,
@@ -100,10 +127,13 @@ def _translateModelCallError(func, *args, **kwargs):
         raise ModelUnavailableError(f"模型服务调用失败：{e}") from e
 
 
-def invokeModel(cfg: "ModelServiceConfig", messages: list) -> str:
-    """非流式调用，返回回复文本。空回复（推理模型兼容性）去惩罚参数重试一次。"""
-    res = _translateModelCallError(lambda: buildChatModel(cfg).invoke(messages))
-    if _isEmptyReply(res):
+def invokeModel(cfg: "ModelServiceConfig", messages: list, *, profile: str = PROFILE_CHAT) -> str:
+    """非流式调用，返回回复文本。空回复（推理模型兼容性）去惩罚参数重试一次。
+
+    analysis 档不带惩罚参数，空回复重试在该档无意义——只在 chat 档执行。
+    """
+    res = _translateModelCallError(lambda: buildChatModel(cfg, profile=profile).invoke(messages))
+    if profile != PROFILE_ANALYSIS and _isEmptyReply(res):
         res = _translateModelCallError(lambda: buildChatModel(cfg, withPenalties=False).invoke(messages))
     return messageText(res)
 

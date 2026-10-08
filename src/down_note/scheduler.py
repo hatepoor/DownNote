@@ -2,7 +2,9 @@
 
 日整合：已结束的日子把当天条目纯程序拼接成一篇日记（kind="daily"），
 随后由兜底扫描分析出"日心情"，再交记忆管理子智能体沉淀长期记忆。
-对应开发文档：docx/v0.1.0/modules/05-分析管线.md、07-长期记忆.md、11-日整合与交互修订.md
+启动时恢复上次中断的分析任务（running → pending）。
+对应开发文档：docx/v0.1.0/modules/05-分析管线.md、07-长期记忆.md、11-日整合与交互修订.md、
+docx/v0.1.2/modules/02-分析提速.md
 """
 
 import logging
@@ -106,6 +108,17 @@ def maintainMemories() -> None:
             logging.getLogger(__name__).exception("会话 %s 记忆维护失败", sessionId)
 
 
+def recoverInterruptedAnalyses() -> None:
+    """启动恢复：把上次运行遗留的 running 条目置回 pending（应用被关掉时任务中断）。
+
+    只在启动时执行——运行期间不重置，避免误伤进行中的分析、破坏认领互斥。
+    """
+    with database.getDb() as db:
+        count = models.resetStaleRunning(db)
+    if count:
+        logging.getLogger(__name__).info("恢复 %s 条中断的分析任务", count)
+
+
 def scanAndConsolidate() -> None:
     """兜底主任务：日整合 → 未分析补扫 → 日记记忆沉淀（顺序保证先有日心情再沉淀）。"""
     consolidatePastDays()
@@ -118,6 +131,7 @@ def startScheduler() -> None:
     global _scheduler
     if _scheduler is not None and _scheduler.running:
         return
+    recoverInterruptedAnalyses()
     _scheduler = BackgroundScheduler()
     _scheduler.add_job(
             scanAndConsolidate,

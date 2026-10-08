@@ -1,0 +1,131 @@
+/* ---- 应用骨架：标题栏（壳下才显示）+ 窄栏 + 面板 ---- */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.app-shell .app {
+  flex: 1;
+  min-height: 0;
+}
+.app {
+  display: flex;
+}
+.rail {
+  width: 64px;
+  flex: none;
+  background: var(--bg-inset);
+  border-right: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 0 20px;
+}
+.seal {
+  width: 34px;
+  height: 34px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  margin-bottom: 42px;
+}
+.rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  padding: 8px 0;
+  margin-bottom: 14px;
+  transition: color 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rail-item svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+.rail-item span {
+  font-family: var(--serif);
+  font-size: var(--fs-meta);
+  letter-spacing: 3px;
+}
+.rail-item:hover {
+  color: var(--accent-hover);
+}
+.rail-item.active {
+  color: var(--accent);
+}
+.rail-spacer {
+  flex: 1;
+}
+
+/* ---- 主区域（09：横幅 + 工作台/记忆页切换） ---- */
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 两个视图叠在同一格：切换时交叉淡化，且不产生布局跳动（工作台 v-show 保状态） */
+.views {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template: 1fr / 1fr;
+}
+.views-workbench,
+.panel-memory {
+  grid-area: 1 / 1;
+  min-height: 0;
+}
+.views-workbench {
+  min-width: 0;
+  display: flex;
+}
+.views-workbench .panel-diary {
+  width: var(--diary-width, 504px);
+}
+/* 视图切换的交叉淡化（与站内落墨曲线一致；减动效偏好由 base.css 全局兜底） */
+.view-fade-enter-active,
+.view-fade-leave-active {
+  transition: opacity 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.view-fade-enter-from,
+.view-fade-leave-to {
+  opacity: 0;
+}
+
+/* ---- 拖拽分栏（按住左右拖调整日记宽度，双击复位）：命中区 9px，可见线 1px 居中 ---- */
+.sash {
+  flex: none;
+  width: 9px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 2;
+}
+.sash::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--hairline);
+  transition: background 0.15s ease-out;
+}
+.sash:hover::after,
+.sash:active::after {
+  background: var(--accent);
+}
+

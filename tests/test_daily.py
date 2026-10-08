@@ -52,7 +52,40 @@ def test_migrationAddsKindColumn(tmp_path):
     columns = {row[1] for row in conn.execute("PRAGMA table_info(entries)")}
     assert "kind" in columns
     assert conn.execute("SELECT content, kind FROM entries").fetchone() == ("旧条目", "entry")
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == database.SCHEMA_VERSION
+    conn.close()
+    database.resetEngine()
+
+
+def test_migrationAddsAnalyzeStateColumn(tmp_path):
+    """旧 v6 库（只有 analyzed 布尔）经 ensureSchema 后补 analyze_state 并按 analyzed 回填：
+    已分析 → done、未分析 → pending（pending 交兜底扫描重扫）。"""
+    database.resetEngine()
+    dbPath = tmp_path / "v6.db"
+    conn = sqlite3.connect(dbPath)
+    conn.execute(
+            "CREATE TABLE entries ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT, image_path VARCHAR, "
+            "created_at VARCHAR NOT NULL, analyzed BOOLEAN NOT NULL, kind VARCHAR NOT NULL)"
+        )
+    conn.execute(
+            "INSERT INTO entries (content, created_at, analyzed, kind) "
+            "VALUES ('已分析条目', '2026-10-05T09:00:00', 1, 'entry')"
+        )
+    conn.execute(
+            "INSERT INTO entries (content, created_at, analyzed, kind) "
+            "VALUES ('未分析条目', '2026-10-05T10:00:00', 0, 'entry')"
+        )
+    conn.execute("PRAGMA user_version = 6")
+    conn.commit()
+    conn.close()
+
+    database.ensureSchema(dbPath)
+
+    conn = sqlite3.connect(dbPath)
+    rows = conn.execute("SELECT analyzed, analyze_state FROM entries ORDER BY id").fetchall()
+    assert rows == [(1, "done"), (0, "pending")]
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == database.SCHEMA_VERSION
     conn.close()
     database.resetEngine()
 
@@ -89,7 +122,7 @@ def test_migrationRemergesDailyDigestsAsPlainText(tmp_path):
     conn = sqlite3.connect(dbPath)
     digest = conn.execute("SELECT content FROM entries WHERE kind = 'daily'").fetchone()[0]
     assert digest == "早上很累。\n\n晚上好些了。\n\n还做了个梦。"
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == database.SCHEMA_VERSION
     conn.close()
     database.resetEngine()
 

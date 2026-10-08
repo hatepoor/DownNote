@@ -5,10 +5,15 @@
 
 from datetime import date
 
+import asyncio
+
 from sqlalchemy import text
 from fastapi.testclient import TestClient
 
 from down_note import config
+from down_note.api import entries as entriesApi
+from down_note.core import analysis
+from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker
 from down_note.db import database, models
 from down_note.app import createApp
 
@@ -258,8 +263,61 @@ def test_updateEntryOnlyTodayAllowed(dataDir, dbFile):
     assert local.put(f"/api/entries/{entryId}", json={"content": "   "}).status_code == 400
 
 
-def test_corsPreflightForTauriShell():
-    """Tauri 壳页面（tauri.localhost）跨源访问本地后端：预检与实际请求都放行。"""
+def test_entryListExposesAnalyzeState(dataDir, dbFile):
+    """列表带出分析状态：新建条目为 pending（前端据此显示"分析中"）。"""
+    with database.getDb(dbFile) as db:
+        models.addEntry(db, "一条待分析", None, "2026-10-05T21:00:00")
+    local = TestClient(createApp())
+    items = local.get("/api/entries").json()
+    assert items[0]["analyzeState"] == "pending"
+
+
+def test_reanalyzeResetsFailedEntryAndSchedulesAgain(dataDir, dbFile, monkeypatch):
+    """失败条目点「刷新」：状态回 pending 并重新排一次分析（分析打成空操作以免联网）。"""
+    with database.getDb(dbFile) as db:
+        entryId = models.addEntry(db, "失败的条目", None, "2026-10-05T21:00:00")
+        models.setAnalyzeState(db, entryId, models.ANALYZE_FAILED)
+
+    called: list[int] = []
+
+    def _fakeAnalyze(entryId: int) -> None:
+        called.append(entryId)
+
+    monkeypatch.setattr(analysis, "analyzeEntry", _fakeAnalyze)
+    local = TestClient(createApp())
+    res = local.post(f"/api/entries/{entryId}/reanalyze")
+    assert res.status_code == 200
+    assert res.json()["analyzeState"] == "pending"
+    assert called == [entryId]
+    with database.getDb(dbFile) as db:
+        assert models.getEntry(db, entryId).analyze_state == models.ANALYZE_PENDING
+
+
+def test_entryEventStreamPushesAnalysisState(dataDir, dbFile):
+    """分析状态推送：向频道发布事件 → 事件流产出对应 SSE 帧（前端据此刷新，无需轮询）。"""
+
+    async def _drive() -> str:
+        stream = entriesApi.entryEventStream()
+        pending = asyncio.ensure_future(stream.__anext__())
+        await asyncio.sleep(0)  # 让生成器先完成订阅
+        broker.publish(
+                ENTRY_EVENTS_CHANNEL,
+                {"type": "analysis", "entryId": 7, "analyzeState": "done"},
+            )
+        frame = await asyncio.wait_for(pending, timeout=1)
+        await stream.aclose()
+        return frame
+
+    frame = asyncio.run(_drive())
+    assert frame == 'data: {"type": "analysis", "entryId": 7, "analyzeState": "done"}\n\n'
+
+
+def test_corsPreflightForTauriShell(dataDir, dbFile):
+    """Tauri 壳页面（tauri.localhost）跨源访问本地后端：预检与实际请求都放行。
+
+    必须带 dbFile：这个用例会 PUT /api/settings/model，没有建表夹具时会写到数据目录里
+    （2026-10-08 踩坑：它曾把测试载荷写进真实用户库）。
+    """
     client = TestClient(createApp())
     preflight = client.options(
         "/api/settings/model",

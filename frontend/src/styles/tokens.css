@@ -1,0 +1,221 @@
+/* ---- Token · 信笺（浅色，默认） ---- */
+:root {
+  /* 原生部件（数字微调箭头等）跟随纸色，避免夜间发白 */
+  color-scheme: light;
+  --bg-page: #f5f3ec;
+  --bg-sheet: #fdfcf8;
+  --bg-companion: #efebe2;
+  --bg-inset: #eae7de;
+  --margin-line: rgba(194, 64, 42, 0.18);
+  --sheet-shadow: 0 1px 2px rgba(28, 27, 24, 0.05), 0 16px 40px -24px rgba(28, 27, 24, 0.24);
+  --grain-op: 0.85;
+  --grain-blend: multiply;
+  --ink-1: #1c1b18;
+  --ink-2: #6e6a61;
+  --ink-3: #8e8a84;
+  --hairline: #c9c2b0;
+  --hairline-strong: #b5ac97;
+  --accent: #c2402a;
+  --accent-hover: #a83422;
+  --accent-soft: #f5eae4;
+  /* 实心按钮用降饱和朱砂：与「低」印章的满饱和朱砂区分，大面积不刺眼 */
+  --accent-fill: color-mix(in srgb, var(--accent) 80%, var(--bg-page));
+  --accent-fill-hover: color-mix(in srgb, var(--accent-hover) 80%, var(--bg-page));
+  --on-accent: #faf9f5;
+  --focus-ring: rgba(194, 64, 42, 0.4);
+  --ok: #52705e;
+  --danger-quiet: #a03a28;
+  --banner-bg: #f1efe9;
+  --banner-ink: #6e6a61;
+  --scrim: rgba(28, 27, 24, 0.32);
+  --shadow-soft: rgba(28, 27, 24, 0.1);
+  --shadow-dialog: rgba(28, 27, 24, 0.24);
+  --shadow-lightbox: rgba(28, 27, 24, 0.35);
+  --scrollbar-thumb: rgba(28, 27, 24, 0.18);
+  --scrollbar-thumb-hover: rgba(28, 27, 24, 0.34);
+
+  /* 情绪色族（05-分析管线 的 EmotionChip 使用，fg 即铅字描边色） */
+  --mood-low: #4a5a6b;
+  --mood-anx: #7a6234;
+  --mood-angry: #8c4a3e;
+  --mood-wronged: #8a5f66;
+  --mood-tired: #5e5570;
+  --mood-calm: #52705e;
+  --mood-hope: #5e7550;
+  --mood-lonely: #56616e;
+  --mood-neutral: #63605a;
+
+  /* 字体栈（宋体 woff2 子集随打包落地，当前走本地回退） */
+  --serif: 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', serif;
+  --sans: 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  --mono: 'Cascadia Mono', 'Consolas', monospace;
+
+  /* 字号/行高 */
+  --fs-meta: 11px;
+  --fs-caption: 12px;
+  --fs-helper: 13px;
+  --fs-body: 14px;
+  --fs-entry: 15px;
+  --fs-summary: 14px;
+  --fs-title: 18px;
+  --fs-brand: 20px;
+
+  /* 圆角：全局 2px，浮层 4px */
+  --radius: 2px;
+  --radius-overlay: 4px;
+}
+
+/* ---- Token · 夜笺（深色，data-theme 切换） ---- */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-page: #1c1b18;
+  --bg-sheet: #262522;
+  --bg-companion: #21201c;
+  --bg-inset: #131211;
+  --margin-line: rgba(210, 74, 50, 0.28);
+  --sheet-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -24px rgba(0, 0, 0, 0.65);
+  --grain-op: 0.8;
+  --grain-blend: screen;
+  --ink-1: #edeae2;
+  --ink-2: #a8a499;
+  --ink-3: #6e6a61;
+  --hairline: #423f38;
+  --hairline-strong: #55514a;
+  --accent: #d24a32;
+  --accent-hover: #e05a40;
+  --accent-soft: #3a231d;
+  --on-accent: #faf9f5;
+  --focus-ring: rgba(210, 74, 50, 0.45);
+  --ok: #8fb09c;
+  --danger-quiet: #c05240;
+  --banner-bg: #26241f;
+  --banner-ink: #a8a499;
+  --scrim: rgba(0, 0, 0, 0.45);
+  --shadow-soft: rgba(0, 0, 0, 0.5);
+  --shadow-dialog: rgba(0, 0, 0, 0.6);
+  --shadow-lightbox: rgba(0, 0, 0, 0.7);
+  --scrollbar-thumb: rgba(237, 234, 226, 0.16);
+  --scrollbar-thumb-hover: rgba(237, 234, 226, 0.34);
+
+  --mood-low: #a9bdcd;
+  --mood-anx: #d2b585;
+  --mood-angry: #cc8a7e;
+  --mood-wronged: #c79ca1;
+  --mood-tired: #ab9fba;
+  --mood-calm: #9bb8a2;
+  --mood-hope: #a8c294;
+  --mood-lonely: #a6b0bf;
+  --mood-neutral: #a39d90;
+}
+
+/* ---- 主题切换：整页交叉淡化（View Transitions，02 §4.4）----
+   日夜互换不再瞬时跳变：旧纸淡出、新纸淡入，同一条落墨曲线；
+   是两帧画面的交叉淡化，不是在页面上盖遮罩（遮罩渐变仍是禁用项） */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.01ms;
+  }
+}
+.dialog-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dialog {
+  width: 460px;
+  background: var(--bg-sheet);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-overlay);
+  box-shadow: 0 16px 48px -8px var(--shadow-dialog);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dialog h2 {
+  font-family: var(--serif);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: 3px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field label {
+  font-size: var(--fs-helper);
+  font-weight: 500;
+  color: var(--ink-2);
+  letter-spacing: 1px;
+}
+.field input {
+  height: 38px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  padding: 0 12px;
+  font-family: var(--sans);
+  font-size: var(--fs-helper);
+  color: var(--ink-1);
+  outline: none;
+  transition: border-color 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.field input:focus {
+  border-color: var(--accent);
+}
+/* 思考强度下拉已改为自绘组件 SelectMenu（components/SelectMenu.vue，样式随组件）：
+   浏览器弹出层（base-select picker）有错位与收起重影等内核怪癖，不再使用原生 select。
+   下面的 color-scheme 仍保留给数字输入的微调箭头等残余原生部件。 */
+.f-hint {
+  font-size: var(--fs-caption);
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+.d-note {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+.d-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.btn-cancel {
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink-2);
+  font-size: var(--fs-helper);
+  letter-spacing: 2px;
+  padding: 8px 18px;
+  border-radius: var(--radius);
+}
+.btn-save {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: var(--fs-helper);
+  font-weight: 500;
+  letter-spacing: 2px;
+  padding: 7px 19px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+.btn-save:hover:not(:disabled) {
+  background: var(--accent-fill-hover);
+}
+.btn-save:disabled {
+  background: transparent;
+  border-color: var(--hairline-strong);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+

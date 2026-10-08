@@ -1,0 +1,428 @@
+/* ---- 对话面板（右，chrome 按定稿；交互随 08 接通） ---- */
+.panel-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-companion);
+}
+.c-head {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 17px 26px;
+}
+/* 面板头的规则线向右收梢渐隐 */
+.c-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--hairline) 0%,
+    var(--hairline) 76%,
+    transparent 100%
+  );
+}
+.c-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 4px;
+}
+/* 在场信号：它在。全站唯一的呼吸灯，与光标呼吸同源（02 §4.4） */
+.presence {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  animation: presenceBreath 3400ms ease-in-out infinite;
+}
+@keyframes presenceBreath {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.78);
+  }
+}
+.c-btns {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.btn-ghost {
+  font-size: 12px;
+  color: var(--ink-2);
+  letter-spacing: 1px;
+  padding: 4px 1px;
+  border-bottom: 1px solid transparent;
+  transition:
+    color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+.btn-ghost:hover {
+  color: var(--ink-1);
+  border-bottom-color: var(--hairline-strong);
+}
+.btn-outline {
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink-1);
+  font-size: 12px;
+  letter-spacing: 2px;
+  padding: 6px 15px;
+  border-radius: var(--radius);
+  transition:
+    border-color 150ms ease-out,
+    color 150ms ease-out;
+}
+.btn-outline:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.msgs {
+  flex: 1;
+  padding: 26px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+.chat-empty {
+  margin: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chat-empty .main {
+  font-family: var(--serif);
+  font-size: var(--fs-title);
+  color: var(--ink-2);
+}
+.chat-empty .sub {
+  font-size: var(--fs-helper);
+  color: var(--ink-3);
+}
+.input {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 14px 26px;
+  align-items: center;
+}
+/* 输入区上缘的规则线同样向右收梢渐隐 */
+.input::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--hairline) 0%,
+    var(--hairline) 76%,
+    transparent 100%
+  );
+}
+.box {
+  flex: 1;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  padding: 11px 16px;
+  font-family: var(--sans);
+  font-size: var(--fs-helper);
+  color: var(--ink-1);
+  background: transparent;
+  outline: none;
+  resize: none;
+  max-height: 120px;
+  line-height: 1.6;
+  transition: border-color 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.box::placeholder {
+  color: var(--ink-3);
+}
+.box:focus {
+  border-color: var(--accent);
+}
+.box:disabled {
+  border-color: var(--hairline-strong);
+  cursor: not-allowed;
+}
+.btn-send {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  padding: 10px 27px;
+  border-radius: var(--radius);
+  transition:
+    background-color 150ms ease-out,
+    transform 120ms ease-out;
+}
+.btn-send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.btn-send:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-send:disabled {
+  background: transparent;
+  border-color: var(--hairline-strong);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+/* ---- 对话消息（定稿：Agent 左 2px 墨缘；用户右朱砂洗） ---- */
+.wake {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--ink-2);
+}
+.msg-agent {
+  border-left: 2px solid var(--ink-1);
+  padding-left: 15px;
+  max-width: 78%;
+}
+.msg-agent .md-body p,
+.msg-agent .md-body li {
+  font-family: var(--serif);
+  font-size: var(--fs-entry);
+  line-height: 2.05;
+}
+/* ---- Markdown 渲染（12-体验修订：Agent 少量 Markdown，按信笺铅字风格） ---- */
+.md-body > * + * {
+  margin-top: 9px;
+}
+.md-body strong {
+  font-weight: 600;
+}
+.md-body em {
+  font-style: italic;
+}
+.md-body ul,
+.md-body ol {
+  padding-left: 1.5em;
+}
+.md-body ul {
+  list-style: disc;
+}
+.md-body ol {
+  list-style: decimal;
+}
+.md-body li + li {
+  margin-top: 3px;
+}
+.md-body code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--bg-inset);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+.md-body pre {
+  background: var(--bg-inset);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+.md-body pre code {
+  background: none;
+  padding: 0;
+  font-size: var(--fs-helper);
+}
+.md-body blockquote {
+  border-left: 2px solid var(--hairline-strong);
+  padding-left: 12px;
+  color: var(--ink-2);
+}
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+  font-family: var(--serif);
+  font-size: var(--fs-entry);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--hairline);
+}
+.md-body a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.md-body table {
+  border-collapse: collapse;
+  font-size: var(--fs-helper);
+}
+.md-body th,
+.md-body td {
+  border: 1px solid var(--hairline);
+  padding: 4px 10px;
+}
+/* 用户气泡缺右下角，指向自己——方向感来自圆角而非尾巴。
+   1px 朱砂描边是必须的：气泡底色与压深后的对话栏亮度只差 1.02:1，光靠底色立不住 */
+.msg-user {
+  align-self: flex-end;
+  background: var(--accent-soft);
+  border: 1px solid var(--margin-line);
+  padding: 10px 16px;
+  max-width: 68%;
+  border-radius: 2px 2px 0 2px;
+}
+.msg-user p {
+  font-size: var(--fs-body);
+  line-height: 1.85;
+  white-space: pre-wrap;
+}
+.md-body.streaming > :last-child::after,
+.md-body.streaming:empty::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 15px;
+  background: var(--accent);
+  vertical-align: -2px;
+  margin-left: 5px;
+  animation: caretBreath 1200ms ease-in-out infinite;
+}
+@keyframes caretBreath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---- 求助资源卡（暖纸卡，浮层圆角 4px） ---- */
+.hotline-card {
+  background: var(--accent-soft);
+  border-radius: var(--radius-overlay);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 85%;
+}
+.hotline-card .title {
+  font-family: var(--serif);
+  font-size: var(--fs-helper);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.hotline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-body);
+}
+.hotline .name {
+  color: var(--ink-1);
+}
+.hotline .region {
+  color: var(--ink-3);
+  font-size: var(--fs-caption);
+  margin-left: 6px;
+}
+.hotline .phone {
+  font-family: var(--mono);
+  font-weight: 500;
+  margin-left: auto;
+}
+.hotline .copy {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+}
+.hotline .copy:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.hotline-card .tail {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+/* ---- 会话历史抽屉（右侧滑出，3 层影） ---- */
+.chat-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 320px;
+  background: var(--bg-page);
+  z-index: 30;
+  border-left: 1px solid var(--hairline);
+  box-shadow: -12px 0 32px -4px var(--shadow-soft);
+  transform: translateX(102%);
+  visibility: hidden;
+  transition: transform 0.2s ease-out, visibility 0s 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 20px 16px;
+}
+.chat-drawer.open {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.2s ease-out;
+}
+.session-item {
+  text-align: left;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.session-item:hover,
+.session-item.active {
+  background: var(--accent-soft);
+}
+.session-item time {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--ink-2);
+}
+.session-item .preview {
+  font-family: var(--serif);
+  font-size: var(--fs-helper);
+  color: var(--ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- 降级输入行 ---- */
+.degraded-input {
+  justify-content: center;
+}
+.degraded-line {
+  font-size: var(--fs-body);
+  color: var(--banner-ink);
+}
+

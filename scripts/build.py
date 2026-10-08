@@ -1,7 +1,7 @@
 """一键构建：前端 → 后端 sidecar（PyInstaller）→ Tauri 打包（NSIS 中文安装包）。
 
 产物：
-- dist/DownNote_0.1.1_x64-setup.exe（安装版，发布用）
+- dist/DownNote_0.1.2_x64-setup.exe（安装版，发布用）
 - src-tauri/target/release/down_note.exe（便携版裸 exe，仍需 resources 后端）
 用法：uv run python scripts/build.py
 对应开发文档：docx/v0.1.0/modules/10-打包发布.md

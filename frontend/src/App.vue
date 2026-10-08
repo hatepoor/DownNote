@@ -2,14 +2,17 @@
 // 应用骨架：窄栏 + 主区域（工作台：日记 + 对话，可拖拽分栏；记忆页）+ 抽屉 + 配置弹窗。
 import { onMounted, onUnmounted, ref } from 'vue'
 
-import ChatPanel from './components/ChatPanel.vue'
-import DegradedBanner from './components/DegradedBanner.vue'
-import DiaryHistoryDrawer from './components/DiaryHistoryDrawer.vue'
-import DiaryPanel from './components/DiaryPanel.vue'
-import MemoryPanel from './components/MemoryPanel.vue'
-import ModelConfigDialog from './components/ModelConfigDialog.vue'
-import TitleBar from './components/TitleBar.vue'
-import { bindTitlebarSync, currentView, isTauri, refreshConfig, switchView, theme, toggleTheme } from './stores/appState'
+import { fetchEntries } from './api'
+import ChatPanel from './components/chat/ChatPanel.vue'
+import DegradedBanner from './components/shell/DegradedBanner.vue'
+import DiaryHistoryDrawer from './components/diary/DiaryHistoryDrawer.vue'
+import DiaryPanel from './components/diary/DiaryPanel.vue'
+import MemoryPanel from './components/memory/MemoryPanel.vue'
+import ModelConfigDialog from './components/shell/ModelConfigDialog.vue'
+import OnboardingGuide from './components/shell/OnboardingGuide.vue'
+import TitleBar from './components/shell/TitleBar.vue'
+import { bindTitlebarSync, currentView, degraded, isShell, refreshConfig, switchView, theme, toggleTheme } from './stores/appState'
+import { hasSeenOnboarding, markOnboardingDone } from './stores/onboarding'
 import { todayString } from './utils/time'
 
 const DIARY_WIDTH_DEFAULT = 504
@@ -19,6 +22,7 @@ const DIARY_WIDTH_KEY = 'down-note:diary-width'
 
 const drawerOpen = ref(false)
 const dialogOpen = ref(false)
+const showOnboarding = ref(false)
 const selectedDay = ref<string | null>(null) // null = 今天
 const diaryWidth = ref(DIARY_WIDTH_DEFAULT)
 
@@ -83,12 +87,33 @@ function onSelectDay(day: string): void {
   drawerOpen.value = false
 }
 
-onMounted(() => {
+// 首次启动才弹：无标记 + 没写过日记 + 还没配模型（老用户静默补写标记，不打扰）
+async function maybeShowOnboarding(): Promise<void> {
+  if (hasSeenOnboarding()) return
+  try {
+    const entries = await fetchEntries(1)
+    if (entries.length > 0 || degraded.value !== true) {
+      markOnboardingDone()
+      return
+    }
+  } catch {
+    return // 探测失败就不打扰
+  }
+  showOnboarding.value = true
+}
+
+function finishOnboarding(): void {
+  markOnboardingDone()
+  showOnboarding.value = false
+}
+
+onMounted(async () => {
   bindTitlebarSync()
-  refreshConfig()
+  await refreshConfig()
   const saved = Number(localStorage.getItem(DIARY_WIDTH_KEY))
   if (saved) diaryWidth.value = clampDiaryWidth(saved)
   window.addEventListener('resize', onWindowResize)
+  await maybeShowOnboarding()
 })
 
 onUnmounted(() => {
@@ -98,7 +123,7 @@ onUnmounted(() => {
 
 <template>
   <div class="app-shell">
-    <TitleBar v-if="isTauri" />
+    <TitleBar v-if="isShell" />
     <div class="grain" aria-hidden="true"></div>
     <div class="app">
       <aside class="rail">
@@ -160,23 +185,28 @@ onUnmounted(() => {
     <div class="main">
       <DegradedBanner @open-settings="dialogOpen = true" />
       <div class="views">
-        <!-- v-show 保住工作台状态：翻记忆页时对话流、回顾事件都不中断 -->
-        <div
-          v-show="currentView === 'workbench'"
-          class="views-workbench"
-          :style="{ '--diary-width': `${diaryWidth}px` }"
-        >
-          <DiaryPanel :day="selectedDay" @back="selectedDay = null" />
+        <!-- 两个视图叠在同一网格单元（见 layout.css .views）：切换时交叉淡化；
+             工作台 v-show 保状态——翻记忆页时对话流、回顾事件都不中断 -->
+        <Transition name="view-fade">
           <div
-            class="sash"
-            role="separator"
-            aria-label="拖动调整日记与对话的宽度"
-            @mousedown.prevent="startDrag"
-            @dblclick="resetDiaryWidth"
-          />
-          <ChatPanel @open-settings="dialogOpen = true" />
-        </div>
-        <MemoryPanel v-if="currentView === 'memory'" />
+            v-show="currentView === 'workbench'"
+            class="views-workbench"
+            :style="{ '--diary-width': `${diaryWidth}px` }"
+          >
+            <DiaryPanel :day="selectedDay" @back="selectedDay = null" />
+            <div
+              class="sash"
+              role="separator"
+              aria-label="拖动调整日记与对话的宽度"
+              @mousedown.prevent="startDrag"
+              @dblclick="resetDiaryWidth"
+            />
+            <ChatPanel @open-settings="dialogOpen = true" />
+          </div>
+        </Transition>
+        <Transition name="view-fade">
+          <MemoryPanel v-show="currentView === 'memory'" />
+        </Transition>
       </div>
     </div>
 
@@ -186,6 +216,13 @@ onUnmounted(() => {
         v-if="dialogOpen"
         @close="dialogOpen = false"
         @saved="refreshConfig"
+      />
+    </Transition>
+    <Transition name="ink">
+      <OnboardingGuide
+        v-if="showOnboarding"
+        @done="finishOnboarding"
+        @open-settings="dialogOpen = true"
       />
     </Transition>
   </div>

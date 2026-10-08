@@ -1,6 +1,6 @@
 [package]
 name = "down_note"
-version = "0.1.1"
+version = "0.1.2"
 description = "低落日记：本地运行的情绪陪伴桌面应用"
 edition = "2021"
 

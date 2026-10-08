@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 
 def createApp() -> FastAPI:
-    app = FastAPI(title="低落日记", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="低落日记", version="0.1.2", lifespan=lifespan)
 
     # Tauri 壳的页面源是 http(s)://tauri.localhost：壳内页面对本地后端的
     # fetch / EventSource 都是跨源请求（PUT 等还会先发 OPTIONS 预检），

@@ -5,17 +5,19 @@
 对应开发文档：docx/v0.1.0/modules/04-记录模块.md、05-分析管线.md
 """
 
+import asyncio
 import json
 import uuid
 from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from down_note import config
 from down_note.core import analysis
+from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker, sseFrame
 from down_note.db import database, models
 
 router = APIRouter(prefix="/api", tags=["entries"])
@@ -40,6 +42,7 @@ class EntryRead(BaseModel):
     imageUrl: str | None
     createdAt: str
     analyzed: bool
+    analyzeState: str  # pending | running | failed | done
     kind: str = "entry"  # entry=当天条目 | daily=日整合日记
     mood: MoodRead | None
 
@@ -77,6 +80,7 @@ def entryToRead(entry: models.Entry) -> EntryRead:
             imageUrl=f"/api/images/{entry.image_path}" if entry.image_path else None,
             createdAt=entry.created_at,
             analyzed=bool(entry.analyzed),
+            analyzeState=entry.analyze_state,
             kind=entry.kind,
             mood=moodToRead(entry.mood),
         )
@@ -130,6 +134,7 @@ def createEntry(
             imageUrl=f"/api/images/{imagePath}" if imagePath else None,
             createdAt=createdAt,
             analyzed=False,
+            analyzeState=models.ANALYZE_PENDING,
             kind="entry",
             mood=None,
         )
@@ -144,6 +149,26 @@ def listEntries(limit: int = 50, offset: int = 0) -> list[EntryRead]:
     with database.getDb() as db:
         entries = models.listEntriesWithMood(db, limit=limit, offset=offset)
         return [entryToRead(entry) for entry in entries]
+
+
+async def entryEventStream():
+    """分析状态常驻事件流（独立生成器便于直接测试：TestClient 会缓冲完整响应，测不了无限流）。"""
+    queue = broker.subscribe(ENTRY_EVENTS_CHANNEL)
+    try:
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=15)
+                yield sseFrame(event)
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+    finally:
+        broker.unsubscribe(ENTRY_EVENTS_CHANNEL, queue)
+
+
+@router.get("/entries/events")
+async def entryEvents() -> StreamingResponse:
+    """分析状态通道：心情记录完成 / 失败即时推送（15 秒保活，与对话事件流同款）。"""
+    return StreamingResponse(entryEventStream(), media_type="text/event-stream")
 
 
 @router.put("/entries/{entryId}")
@@ -168,6 +193,24 @@ def updateEntry(
         models.updateEntryContent(db, entryId, text)
         models.clearMood(db, entryId)
         result = entryToRead(models.getEntry(db, entryId))
+    backgroundTasks.add_task(analysis.analyzeEntry, entryId)
+    return result
+
+
+@router.post("/entries/{entryId}/reanalyze")
+def reanalyzeEntry(entryId: int, backgroundTasks: BackgroundTasks) -> EntryRead:
+    """重新分析一条日记（失败条目的「刷新」按钮）。
+
+    状态处理：running 保持不动（避免与在跑的任务重复），其余回到 pending 再排一次后台分析；
+    旧心情记录不清——新结果抵达前界面仍显示上一版，避免闪空。
+    """
+    with database.getDb() as db:
+        entry = models.getEntry(db, entryId)
+        if entry is None:
+            raise HTTPException(status_code=404, detail="条目不存在")
+        if entry.analyze_state != models.ANALYZE_RUNNING:
+            models.setAnalyzeState(db, entryId, models.ANALYZE_PENDING)
+        result = entryToRead(entry)
     backgroundTasks.add_task(analysis.analyzeEntry, entryId)
     return result
 

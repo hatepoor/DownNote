@@ -1,0 +1,14 @@
+/* ============================================================
+   低落日记 · 全局 Token 与基础样式
+   方向：信笺铅字（见 front_design/01-设计原则.md、02-视觉规范.md）
+   纪律：宋体主导 · 无卡片规则线 · 方角 2px（浮层 4px）·
+        常态零阴影 · 朱砂全站唯一暖色 · 等宽时间戳
+   ============================================================ */
+
+@import './tokens.css';
+@import './base.css';
+@import './layout.css';
+@import './overlays.css';
+@import './diary.css';
+@import './chat.css';
+@import './memory.css';

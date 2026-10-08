@@ -96,3 +96,54 @@ def test_analyzeSkipsAlreadyAnalyzed(entryId, dbFile, monkeypatch):
     monkeypatch.setattr(agentLlm, "buildChatModel", _fakeBuild)
     assert analysis.analyzeEntry(entryId) is None
     assert calls == 0
+
+
+def test_claimIsMutuallyExclusive(dbFile):
+    """认领互斥：同一条目第二次认领必须失败——手动刷新与兜底扫描不会重复分析。"""
+    with database.getDb(dbFile) as db:
+        entryId = models.addEntry(db, "一条待分析", None, "2026-10-05T21:00:00")
+    with database.getDb(dbFile) as db:
+        assert models.claimForAnalysis(db, entryId) is True
+    with database.getDb(dbFile) as db:
+        assert models.claimForAnalysis(db, entryId) is False
+
+
+def test_analysisDiscardsResultWhenContentChanged(dbFile, monkeypatch):
+    """分析期间正文被改：丢弃本次结果、状态回 pending、不写心情记录（旧正文不覆盖新正文）。"""
+    with database.getDb(dbFile) as db:
+        models.setSetting(db, "base_url", "http://model.local/v1")
+        models.setSetting(db, "model_name", "test-model")
+        entryId = models.addEntry(db, "原始正文", None, "2026-10-05T21:00:00")
+
+    def _fakeInvokeModel(cfg, messages, **kwargs):
+        with database.getDb(dbFile) as inner:
+            models.updateEntryContent(inner, entryId, "分析途中被改的正文")
+        return _goodJson()
+
+    monkeypatch.setattr(agentLlm, "invokeModel", _fakeInvokeModel)
+    assert analysis.analyzeEntry(entryId) is None
+    with database.getDb(dbFile) as db:
+        assert models.getEntry(db, entryId).analyze_state == models.ANALYZE_PENDING
+        assert models.getMoodByEntry(db, entryId) is None
+
+
+def test_analysisMarksFailedWhenBudgetExhausted(dbFile, monkeypatch):
+    """总预算耗尽：落 failed（界面显示「分析失败」+ 刷新；兜底扫描随后重试）。"""
+    with database.getDb(dbFile) as db:
+        models.setSetting(db, "base_url", "http://model.local/v1")
+        models.setSetting(db, "model_name", "test-model")
+        entryId = models.addEntry(db, "预算耗尽的条目", None, "2026-10-05T21:00:00")
+    monkeypatch.setattr(analysis, "ANALYSIS_TOTAL_BUDGET_SECONDS", -1.0)
+    assert analysis.analyzeEntry(entryId) is None
+    with database.getDb(dbFile) as db:
+        assert models.getEntry(db, entryId).analyze_state == models.ANALYZE_FAILED
+
+
+def test_editResetsStateSoReanalysisRuns(dbFile, monkeypatch):
+    """编辑正文后必须回到待分析：否则新正文会被 done 状态卡住、永不重析。"""
+    with database.getDb(dbFile) as db:
+        entryId = models.addEntry(db, "旧正文", None, "2026-10-05T21:00:00")
+        models.setAnalyzeState(db, entryId, models.ANALYZE_DONE)
+    with database.getDb(dbFile) as db:
+        models.updateEntryContent(db, entryId, "新正文")
+        assert models.getEntry(db, entryId).analyze_state == models.ANALYZE_PENDING

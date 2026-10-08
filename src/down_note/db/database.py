@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from down_note import config
 from down_note.db import models
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _engine: Engine | None = None
 
@@ -81,6 +81,8 @@ def ensureSchema(dbPath: Path | str | None = None) -> None:
             _migrateToV5(conn)
         if version < 6:
             _migrateToV6(conn)
+        if version < 7:
+            _migrateToV7(conn)
         conn.execute(text(f"PRAGMA user_version = {SCHEMA_VERSION}"))
         conn.commit()
 
@@ -108,6 +110,20 @@ def _migrateToV6(conn) -> None:
     """v5 → v6：整合日记正文回归纯文本（时间戳与分隔线撤除）；
     每条的心情改由日页按条展示，正文不再承担版式。"""
     _remergeDailyDigests(conn)
+
+
+def _migrateToV7(conn) -> None:
+    """v6 → v7：entries 增加 analyze_state 列（旧库补列并按 analyzed 回填；新库 create_all 已带）。
+
+    analyzed 保留为兼容镜像（state == 'done' 时为 1），回填幂等、可重复执行。
+    """
+    columns = {row[1] for row in conn.execute(text("PRAGMA table_info(entries)"))}
+    if "analyze_state" not in columns:
+        conn.execute(
+                text("ALTER TABLE entries ADD COLUMN analyze_state VARCHAR NOT NULL DEFAULT 'pending'")
+            )
+    conn.execute(text("UPDATE entries SET analyze_state = 'done' WHERE analyzed = 1"))
+    conn.execute(text("UPDATE entries SET analyze_state = 'pending' WHERE analyzed = 0"))
 
 
 def _remergeDailyDigests(conn) -> None:

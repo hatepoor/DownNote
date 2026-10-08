@@ -1,0 +1,148 @@
+/* ---- 长期记忆页（09：工作台 ⇄ 记忆） ---- */
+.panel-memory {
+  flex: 1;
+  min-width: 0;
+  padding: 26px 34px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+.m-head {
+  border-bottom: 2px solid var(--ink-1);
+  padding-bottom: 12px;
+}
+.m-head h2 {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 4px;
+}
+.m-head p {
+  margin-top: 7px;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  letter-spacing: 1px;
+}
+.m-error {
+  font-size: var(--fs-caption);
+  color: var(--danger-quiet);
+}
+.m-cols {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 38px;
+}
+.m-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.m-col h3 {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 3px;
+}
+.m-col-hint {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+  letter-spacing: 1px;
+}
+.m-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.m-item {
+  border-top: 1px solid var(--hairline);
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.m-content {
+  font-family: var(--serif);
+  font-size: var(--fs-entry);
+  line-height: 1.8;
+}
+.m-item-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--ink-2);
+}
+.m-item-ops {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.m-link {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  letter-spacing: 1px;
+}
+.m-link:hover {
+  color: var(--accent);
+}
+.m-link-danger {
+  color: var(--danger-quiet);
+}
+.m-del-hint {
+  font-family: var(--serif);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 1px;
+}
+.m-empty {
+  border-top: 1px solid var(--hairline);
+  padding: 12px 0;
+  font-family: var(--serif);
+  font-size: var(--fs-summary);
+  line-height: 1.8;
+  color: var(--ink-3);
+}
+.m-edit {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid var(--ink-1);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-1);
+  font-family: var(--serif);
+  font-size: var(--fs-body);
+  line-height: 1.8;
+  padding: 8px 11px;
+  outline: none;
+  resize: vertical;
+  transition: border-color 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.m-edit:focus {
+  border-color: var(--accent);
+}
+.m-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 10px;
+}
+.m-add-btn {
+  align-self: flex-start;
+}
+.m-add .m-item-ops {
+  justify-content: flex-end;
+}
+.m-item .m-item-ops {
+  justify-content: flex-end;
+}

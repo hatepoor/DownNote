@@ -1,12 +1,21 @@
 """进程内事件总线 + 每会话回合闸门。
 
 事件总线：后台任务完成 → 前端推送（每会话常驻 SSE 事件流订阅，无订阅者时事件自然消散）；
+分析状态也走同一总线（ENTRY_EVENTS_CHANNEL，全局频道，单用户应用不分会话）。
 回合闸门：回合执行与回顾注入互斥——注入永不打断回合、永不丢失（等回合结束再写）。
-对应开发文档：docx/v0.1.0/modules/08-对话Agent.md
+对应开发文档：docx/v0.1.0/modules/08-对话Agent.md、docx/v0.1.2/modules/02-分析提速.md
 """
 
 import asyncio
+import json
 import threading
+
+ENTRY_EVENTS_CHANNEL = "entries"  # 分析状态推送频道（单用户应用，不分会话）
+
+
+def sseFrame(event: dict) -> str:
+    """SSE 数据帧（与对话事件流同格式）。"""
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
 class EventBroker:

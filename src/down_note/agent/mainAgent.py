@@ -1,9 +1,10 @@
 """主智能体 graph：承接当前用户会话；消息严格追加保 prefix cache。
 
-工具：getCurrentTime（时间上下文）、dispatchRecall（火后不理派发回顾子智能体）。
+工具：getCurrentTime（时间上下文）、queryDiaries（日记查询）、长期记忆增改删查（MEMORY_TOOLS）、
+dispatchRecall（火后不理派发回顾子智能体）。
 回顾结果由后台线程双写——messages 表（展示）+ update_state（注入主图上下文），
 注入受回合闸门约束：回合进行中则等回合结束后注入——不打断、不重说、不丢失。
-对应开发文档：docx/v0.1.0/modules/08-对话Agent.md
+对应开发文档：docx/v0.1.0/modules/08-对话Agent.md、docx/v0.1.2/modules/01-记忆写入.md
 """
 
 import logging
@@ -18,7 +19,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from down_note.agent import llm, recallAgent
 from down_note.agent.checkpointer import getCheckpointer
 from down_note.agent.context import nowIso
-from down_note.agent.tools import getCurrentTime, queryDiaries
+from down_note.agent.tools import MEMORY_TOOLS, getCurrentTime, queryDiaries
 from down_note.core.events import broker, turnLock
 from down_note.db import database, models
 
@@ -42,14 +43,16 @@ def buildMainAgent(cfg: "ModelServiceConfig", checkpointer, sessionId: str):
         thread.start()
         return "回忆助手已在后台开始检索历史会话，完成后结果会直接发到对话里。请告诉用户你正在翻记录，请稍等。"
 
-    tools = [getCurrentTime, queryDiaries, dispatchRecall]
+    tools = [getCurrentTime, queryDiaries, *MEMORY_TOOLS, dispatchRecall]
     model = llm.buildChatModel(cfg).bind_tools(tools)
 
     def agentNode(state: MessagesState):
         res = model.invoke(state["messages"])
         if not res.tool_calls and not llm.messageText(res):
-            # 空回复兜底（推理模型 + 惩罚参数的兼容性问题）：去惩罚参数重试一次
-            res = llm.buildChatModel(cfg, withPenalties=False).invoke(state["messages"])
+            # 空回复兜底（推理模型 + 惩罚参数的兼容性问题）：去惩罚参数重试一次；
+            # 兜底分支同样绑定工具——否则这一轮模型无工具可调（含记忆写入）
+            fallback = llm.buildChatModel(cfg, withPenalties=False).bind_tools(tools)
+            res = fallback.invoke(state["messages"])
         return {"messages": [res]}
 
     builder = StateGraph(MessagesState)

@@ -58,6 +58,7 @@ def assess(text: str, cfg: "ModelServiceConfig") -> bool:
                     SystemMessage(content=CRISIS_ASSESS_PROMPT),
                     HumanMessage(content=text),
                 ],
+                profile=llm.PROFILE_ANALYSIS,
             )
         data = json.loads(llm.stripCodeFence(raw))
         return bool(data.get("crisis"))

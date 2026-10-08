@@ -1,0 +1,125 @@
+/* ---- 基础 ---- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html,
+body,
+#app {
+  height: 100%;
+}
+body {
+  background: var(--bg-page);
+  color: var(--ink-1);
+  font-family: var(--sans);
+  font-size: var(--fs-body);
+  overflow: hidden;
+}
+button {
+  font-family: inherit;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: inherit;
+}
+button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+[hidden] {
+  display: none !important;
+}
+
+/* ---- 滚动条：细、静，随纸色（Chromium / webview） ---- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 3px solid transparent;
+  border-radius: 2px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+/* ---- 滚动边缘渐进渐出（utils/scrollFade.ts 驱动 --fade-*，随滚动连续变化） ---- */
+.scroll-fade {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--fade-top, 0px),
+    #000 calc(100% - var(--fade-bottom, 0px)),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--fade-top, 0px),
+    #000 calc(100% - var(--fade-bottom, 0px)),
+    transparent
+  );
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* 纸纹：整屏一张纸的物理颗粒（02 §3.5，衬在产品内容之上，与浮层同属纸面） */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: var(--grain-op);
+  mix-blend-mode: var(--grain-blend);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='.12'/%3E%3C/svg%3E");
+}
+
+/* ---- 落印（02 §4.1）：成块内容压上纸面，opacity 0→1 ＋ scale 1.03→1 ---- */
+@keyframes stampPress {
+  from {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.stamp-entry {
+  animation: stampPress 260ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.stamp-mood {
+  animation: stampPress 200ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.mood-block {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.turn-error {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+.retry-link {
+  color: var(--accent);
+  font-size: var(--fs-caption);
+  border-bottom: 1px solid transparent;
+}
+.retry-link:hover {
+  border-bottom-color: var(--accent);
+}
+

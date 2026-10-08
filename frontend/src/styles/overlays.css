@@ -1,0 +1,115 @@
+/* ---- 降级横幅（未配置模型时常驻，配置恢复后消失） ---- */
+.degraded-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 9px 26px;
+  background: var(--banner-bg);
+  border-bottom: 1px solid var(--hairline);
+}
+.degraded-banner .db-text {
+  font-size: var(--fs-caption);
+  color: var(--banner-ink);
+  letter-spacing: 1px;
+}
+
+/* ---- 配置弹窗（浮层，4 层影） ---- */
+/* 落墨入场/退场：弹窗不再"蹦"出来，透明度渐进（02 §4.1） */
+.ink-enter-active,
+.ink-leave-active {
+  transition: opacity 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ink-enter-from,
+.ink-leave-to {
+  opacity: 0;
+}
+
+/* ---- 图片查看（浮层，4 层影） ---- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: 92%;
+  max-height: 92%;
+  border-radius: var(--radius-overlay);
+  box-shadow: 0 24px 64px -8px var(--shadow-lightbox);
+}
+
+/* ---- 心情记录条（铅字框：1px 语义色描边 + 宋体小字 + 纸底） ---- */
+.mood {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.chip {
+  font-family: var(--serif);
+  font-size: 11px;
+  letter-spacing: 2px;
+  border: 1px solid currentColor;
+  background: transparent;
+  padding: 2px 9px;
+  border-radius: 1px;
+}
+.chip.low {
+  color: var(--mood-low);
+}
+.chip.anx {
+  color: var(--mood-anx);
+}
+.chip.angry {
+  color: var(--mood-angry);
+}
+.chip.wronged {
+  color: var(--mood-wronged);
+}
+.chip.tired {
+  color: var(--mood-tired);
+}
+.chip.calm {
+  color: var(--mood-calm);
+}
+.chip.hope {
+  color: var(--mood-hope);
+}
+.chip.lonely {
+  color: var(--mood-lonely);
+}
+.chip.neutral {
+  color: var(--mood-neutral);
+}
+.dots {
+  font-family: var(--serif);
+  font-size: 11px;
+  letter-spacing: 0;
+  line-height: 1;
+  display: inline-flex;
+}
+.dots .on {
+  color: var(--ink-2);
+}
+.dots .off {
+  color: var(--hairline-strong);
+}
+.summary {
+  font-family: var(--serif);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* ---- 照顾标记（危机条目的安静角标，无红无闪） ---- */
+.crisis-mark {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  letter-spacing: 1px;
+}
+
