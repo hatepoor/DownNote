@@ -1,10 +1,12 @@
 """长期记忆工具：addMemory。
 
-对应开发文档：docx/v0.1.0/modules/07-长期记忆.md、docx/v0.1.2/modules/01-记忆写入.md
+对应开发文档：docx/v0.1.0/modules/07-长期记忆.md、docx/v0.1.2/modules/01-记忆写入.md、
+docx/v0.1.2/modules/10-记忆即时可见.md
 """
 
 from langchain_core.tools import tool
 
+from down_note.core.events import notifyMemoryChanged
 from down_note.db import database, models
 
 
@@ -15,4 +17,5 @@ def addMemory(category: str, content: str) -> str:
         return "category 只能是 basic 或 psych"
     with database.getDb() as db:
         memoryId = models.addLongTermMemory(db, category, content, updatedBy="agent")
+    notifyMemoryChanged()
     return f"已新增记忆 #{memoryId}：{content}"

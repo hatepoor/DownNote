@@ -1,5 +1,5 @@
-// 长期记忆接口：增改删查。
-import { api } from './http'
+// 长期记忆接口：增改删查；变更走 SSE 推送（智能体写入后前端即时刷新）。
+import { api, apiBase } from './http'
 import type { MemoryItem } from './types'
 
 export async function fetchMemories(): Promise<MemoryItem[]> {
@@ -40,4 +40,13 @@ export async function updateMemory(memoryId: number, content: string): Promise<M
 export async function deleteMemory(memoryId: number): Promise<void> {
   const res = await api(`/api/memories/${memoryId}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('没有删掉，再试一次')
+}
+
+// 记忆变更常驻事件流（与分析状态流同款）：任何写入成功后即时通知，无需轮询
+export async function openMemoryEvents(
+  onEvent: (e: { type: string }) => void,
+): Promise<EventSource> {
+  const source = new EventSource(`${await apiBase()}/api/memories/events`)
+  source.onmessage = (e) => onEvent(JSON.parse(e.data))
+  return source
 }

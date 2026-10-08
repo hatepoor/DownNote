@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // 长期记忆页：基本信息 / 性格画像两栏，用户可查看、编辑、删除、自行添加。
 // 与智能体维护共用同一张表：谁后改谁生效，不设修改锁（CONTEXT.md「长期记忆」）。
-import { onMounted, ref } from 'vue'
+// 刷新机制：后端推送为主（任何写入即时通知）+ 切回本页兜底刷新，推送断线也不会停留在旧列表。
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 
-import { createMemory, deleteMemory, updateMemory, type MemoryItem } from '../../api'
-import { memories, memoriesFailed, refreshMemories } from '../../stores/appState'
+import { createMemory, deleteMemory, openMemoryEvents, updateMemory, type MemoryItem } from '../../api'
+import { currentView, memories, memoriesFailed, refreshMemories } from '../../stores/appState'
 
 type Category = 'basic' | 'psych'
 
@@ -30,7 +31,36 @@ const addingText = ref('')
 const confirmingId = ref<number | null>(null)
 const errorText = ref('')
 
-onMounted(refreshMemories)
+let memoryEvents: EventSource | null = null
+let refreshTimer: number | null = null
+
+// 事件合并：一批推送最多触发一次刷新
+function scheduleRefresh(): void {
+  if (refreshTimer !== null) return
+  refreshTimer = window.setTimeout(() => {
+    refreshTimer = null
+    refreshMemories()
+  }, 200)
+}
+
+// 切回记忆页兜底刷新一次：推送通道不可用时也能看到最新记忆
+watch(currentView, (view) => {
+  if (view === 'memory') refreshMemories()
+})
+
+onMounted(async () => {
+  await refreshMemories()
+  try {
+    memoryEvents = await openMemoryEvents(scheduleRefresh) // EventSource 断线会自重连
+  } catch {
+    // 推送订阅失败：靠切页兜底刷新
+  }
+})
+
+onUnmounted(() => {
+  memoryEvents?.close()
+  if (refreshTimer !== null) window.clearTimeout(refreshTimer)
+})
 
 function itemsOf(category: Category): MemoryItem[] {
   return memories.value.filter((memory) => memory.category === category)

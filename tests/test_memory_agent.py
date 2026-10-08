@@ -1,7 +1,7 @@
 """记忆管理子智能体测试：mock 模型（带 tool_calls）驱动真实 LangGraph 图与工具。
 
-覆盖：工具调用新增落库、无操作路径、调度器联动（维护标记与二跑不再命中）。
-对应模块：docx/v0.1.0/modules/07-长期记忆.md
+覆盖：工具调用新增落库、无操作路径、调度器联动（维护标记与二跑不再命中）、工具侧变更通知。
+对应模块：docx/v0.1.0/modules/07-长期记忆.md、docx/v0.1.2/modules/10-记忆即时可见.md
 """
 
 from langchain_core.language_models import GenericFakeChatModel
@@ -9,6 +9,9 @@ from langchain_core.messages import AIMessage
 
 from down_note.agent import llm as agentLlm
 from down_note.agent import memoryAgent
+from down_note.agent.tools.memory import add as memoryAddTool
+from down_note.agent.tools.memory import delete as memoryDeleteTool
+from down_note.agent.tools.memory import update as memoryUpdateTool
 from down_note.config import ModelServiceConfig
 from down_note.db import database, models
 from down_note import scheduler
@@ -102,3 +105,22 @@ def test_schedulerSkipsWhenNotConfigured(dbFile, monkeypatch):
         )
     scheduler.maintainMemories()
     assert ran == []  # 降级（无配置）整体跳过
+
+
+def test_memoryToolsNotifyFrontend(dbFile, monkeypatch):
+    """三个记忆工具落库成功后都通知前端——对话 / 记忆维护 / 日整合共用这套工具。"""
+    calls: list[str] = []
+    for module in (memoryAddTool, memoryUpdateTool, memoryDeleteTool):
+        monkeypatch.setattr(module, "notifyMemoryChanged", lambda: calls.append("memory"))
+
+    added = memoryAddTool.addMemory.invoke({"category": "psych", "content": "喜欢跑步"})
+    assert added.startswith("已新增记忆")
+    assert memoryUpdateTool.updateMemory.invoke({"memoryId": 1, "content": "平时喜欢跑步"}) == "已更新记忆 #1"
+    assert memoryDeleteTool.deleteMemory.invoke({"memoryId": 1}) == "已删除记忆 #1"
+    assert calls == ["memory", "memory", "memory"]
+
+    # 失败路径（编号不存在）不通知
+    calls.clear()
+    assert "不存在" in memoryUpdateTool.updateMemory.invoke({"memoryId": 999, "content": "x"})
+    assert "不存在" in memoryDeleteTool.deleteMemory.invoke({"memoryId": 999})
+    assert calls == []
