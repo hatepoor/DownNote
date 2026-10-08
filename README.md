@@ -4,6 +4,7 @@
   <p><strong>一本会陪你说话的日记 · 开源 · 本地运行 · 无账号</strong></p>
   <p>
     <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+    <img src="https://img.shields.io/badge/version-0.1.2-orange" alt="v0.1.2">
     <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python 3.12">
     <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey" alt="Windows">
   </p>
@@ -23,19 +24,19 @@
 
 而是一个 agent——一个接纳你所有低落情绪的 agent。你的情绪，它都读得到；在你低落的时候，陪你说说话。
 
-## 功能一览（v0.1.0）
+## 功能一览（v0.1.2）
 
 - **记录**：文字 + 图片，随时写下此刻的心情
-- **心情记录**：每条日记后台自动分析，产出情绪标签、强度与一句摘要
-- **唤醒对话**：多智能体陪伴聊天，开口前它会先读你最近写下的日子
+- **心情记录**：每条日记后台自动分析，通常 1 秒内产出情绪标签、强度与一句摘要（专用生成参数，不先"想一大段"）；失败会显示「分析失败」，点「刷新」即可重试
+- **唤醒对话**：多智能体陪伴聊天，开口前它会先读你最近写下的日子；说话像朋友发微信，不端着
 - **跨天整合**：一天结束时自动把当天条目整合成一篇日记，模型分析"这一天的心情"，并沉淀为长期记忆
 - **危机应对**：关键词初筛 + 模型复判，先共情接住，再温和给出求助资源；不评判、不中断
 - **长期记忆**：完全透明——可查看、可编辑、可删除，智能体维护与你的手写同等有效
-- **体验细节**：日/夜双主题、Markdown 渲染、历史按天浏览、过去的日记锁定不可改、可拖拽分栏
+- **体验细节**：日/夜双主题、Markdown 渲染、历史按天浏览、过去的日记锁定不可改、可拖拽分栏、首启三步引导、条目悬停反馈
 
 ## 下载使用
 
-1. 从 [Releases](../../releases) 下载安装包（如 `DownNote_0.1.1_x64-setup.exe`），双击运行安装向导——选择安装位置、可选桌面快捷方式；不需要安装 Python 或 Node
+1. 从 [Releases](../../releases) 下载安装包（如 `DownNote_0.1.2_x64-setup.exe`），双击运行安装向导——选择安装位置、可选桌面快捷方式；不需要安装 Python 或 Node。从旧版本升级直接覆盖安装，日记与配置保留
 2. 安装完成自动启动，首次启动自动建库
 3. 点左侧栏「设置」配置模型，保存即生效
 
@@ -56,7 +57,7 @@
 
 - 日记、心情记录、长期记忆保存在**本机** SQLite（Windows：`%APPDATA%\down_note`），不回传任何自有服务器
 - 唯一出网的调用是你对模型服务的请求：日记原文按你的配置直发你自选的模型服务，隐私权衡在你
-- API Key 只存本机 `.env`（模板见 [.env.example](.env.example)），永不上传、不进数据库
+- API Key 只存在本机数据目录下的 `.env`（模板见 [.env.example](.env.example)），永不上传、不进数据库
 - 求助热线可自定义：在数据目录放一份 `hotlines.json` 即可覆盖内置数据
 
 ## 危机应对与免责
@@ -72,20 +73,20 @@ git clone https://github.com/hatepoor/DownNote.git
 cd down_note
 uv sync                                  # 后端依赖
 cd frontend && npm install && cd ..      # 前端依赖
-uv run pytest                            # 跑测试（79 个）
+uv run pytest                            # 跑测试（88 个）
 uv run python -m down_note.main          # 启动桌面应用
 ```
 
 - 开发模式：`cd frontend && npm run dev`，应用窗口/浏览器会自动走 Vite 热更新
-- 打包发布：`uv run python scripts/build.py` → 产出 `dist/down_note/`，整目录压缩即为发布 zip
+- 打包发布：`uv run python scripts/build.py` → 前端构建 → 后端 sidecar（PyInstaller）→ Tauri NSIS 安装包，产物为 `dist/DownNote_0.1.2_x64-setup.exe`
 
 ## 目录结构
 
 ```
 down_note/
-├─ src/down_note/     # 后端：FastAPI + LangGraph 多智能体 + SQLite
-├─ frontend/          # 前端：Vue 3（Vite + TS）
-├─ scripts/           # 打包脚本（entry / spec / build）与发布说明
+├─ src/down_note/     # 后端：FastAPI + LangGraph 多智能体 + SQLite（工具/提示词按域原子化）
+├─ frontend/          # 前端：Vue 3（Vite + TS）+ Tauri 2 桌面壳（src-tauri/）
+├─ scripts/           # 打包脚本（前端构建 / 后端 sidecar / NSIS 安装包）
 ├─ docs/              # ADR 决策记录、Release 说明草稿
 ├─ docx/              # 开发文档：需求、架构、模块 todolist、进度树
 ├─ front_design/      # 前端设计定稿与应用图标
@@ -94,7 +95,7 @@ down_note/
 
 ## 技术栈
 
-Vue 3（Vite + TypeScript）· Python 3.12 · FastAPI · SQLAlchemy + SQLite · APScheduler · LangGraph · pywebview · PyInstaller
+Vue 3（Vite + TypeScript）· Python 3.12 · FastAPI · SQLAlchemy + SQLite · APScheduler · LangGraph · Tauri 2 · PyInstaller（后端 sidecar）
 
 ## License
 
