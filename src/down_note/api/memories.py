@@ -33,7 +33,7 @@ class MemoryRead(BaseModel):
 
 class MemoryWrite(BaseModel):
     content: str = Field(min_length=1, max_length=CONTENT_MAX_LENGTH)
-    category: str = "basic"  # 仅新增时使用；编辑只认 content
+    category: str | None = None  # 新增：省略按 basic；编辑：省略则不改分类
 
 
 def _cleanContent(raw: str) -> str:
@@ -82,12 +82,13 @@ async def memoryEvents() -> StreamingResponse:
 
 @router.post("", status_code=201)
 def createMemory(body: MemoryWrite) -> MemoryRead:
-    if body.category not in CATEGORIES:
+    category = body.category if body.category is not None else "basic"
+    if category not in CATEGORIES:
         raise HTTPException(status_code=400, detail="category 只能是 basic 或 psych")
     with database.getDb() as db:
         memoryId = models.addLongTermMemory(
                 db,
-                body.category,
+                category,
                 _cleanContent(body.content),
                 updatedBy="user",
             )
@@ -98,12 +99,15 @@ def createMemory(body: MemoryWrite) -> MemoryRead:
 
 @router.put("/{memoryId}")
 def updateMemory(memoryId: int, body: MemoryWrite) -> MemoryRead:
+    if body.category is not None and body.category not in CATEGORIES:
+        raise HTTPException(status_code=400, detail="category 只能是 basic 或 psych")
     with database.getDb() as db:
         ok = models.updateLongTermMemory(
                 db,
                 memoryId,
                 _cleanContent(body.content),
                 updatedBy="user",
+                category=body.category,
             )
         if not ok:
             raise HTTPException(status_code=404, detail="记忆不存在")

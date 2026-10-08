@@ -75,6 +75,44 @@ def test_userEditFeedsAgentContext(dbFile):
     assert "[性格画像] 最近睡得很晚" in memoriesText
 
 
+def test_updateMemoryCanRecategorize(dbFile):
+    """编辑可改分类（归位用）：PUT 带 category 移动栏目；非法分类 400 且不动库。
+
+    对应模块：docx/v0.1.2/modules/11-记忆分类与归位.md
+    """
+    client = _client()
+
+    # 新增省略 category → 默认 basic（旧行为保持）
+    defaulted = client.post("/api/memories", json={"content": "默认分类"})
+    assert defaulted.status_code == 201
+    assert defaulted.json()["category"] == "basic"
+
+    created = client.post("/api/memories", json={"category": "basic", "content": "喜欢看漫画解说"})
+    memoryId = created.json()["id"]
+
+    # 带 category：内容与分类一并更新
+    resp = client.put(
+            f"/api/memories/{memoryId}",
+            json={"content": "用户喜欢看漫画解说", "category": "psych"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["category"] == "psych"
+    assert resp.json()["content"] == "用户喜欢看漫画解说"
+
+    # 省略 category：只改内容，分类不动（向后兼容）
+    resp = client.put(f"/api/memories/{memoryId}", json={"content": "用户爱看漫画解说"})
+    assert resp.status_code == 200
+    assert resp.json()["category"] == "psych"
+
+    # 非法分类：400 且库里不动
+    bad = client.put(f"/api/memories/{memoryId}", json={"content": "x", "category": "hobby"})
+    assert bad.status_code == 400
+    with database.getDb() as db:
+        kept = models.getLongTermMemory(db, memoryId)
+        assert kept.category == "psych"
+        assert kept.content == "用户爱看漫画解说"
+
+
 def test_memoryEventStreamPushesChange(dataDir, dbFile):
     """记忆变更推送：向频道发布事件 → 事件流产出对应 SSE 帧（前端据此刷新，无需重启）。"""
 

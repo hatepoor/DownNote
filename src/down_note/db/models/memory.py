@@ -1,6 +1,7 @@
 """长期记忆：基本信息与性格画像条目，用户可见可改可删。
 
-对应开发文档：docx/v0.1.0/modules/07-长期记忆.md、docx/v0.1.2/modules/00-结构重构.md
+对应开发文档：docx/v0.1.0/modules/07-长期记忆.md、docx/v0.1.2/modules/00-结构重构.md、
+docx/v0.1.2/modules/11-记忆分类与归位.md
 """
 
 from datetime import datetime
@@ -56,11 +57,20 @@ def addLongTermMemory(db: Session, category: str, content: str, updatedBy: str) 
     return memory.id
 
 
-def updateLongTermMemory(db: Session, memoryId: int, content: str, updatedBy: str) -> bool:
+def updateLongTermMemory(
+        db: Session,
+        memoryId: int,
+        content: str,
+        updatedBy: str,
+        category: str | None = None,
+    ) -> bool:
+    """改内容；category 给了就一并改分类（发现放错时归位，不传保持原行为）。"""
     memory = db.get(LongTermMemory, memoryId)
     if memory is None:
         return False
     memory.content = content
+    if category is not None:
+        memory.category = category
     memory.updated_by = updatedBy
     memory.updated_at = datetime.now().isoformat(timespec="seconds")
     return True

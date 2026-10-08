@@ -24,11 +24,15 @@ export async function createMemory(
   return res.json()
 }
 
-export async function updateMemory(memoryId: number, content: string): Promise<MemoryItem> {
+export async function updateMemory(
+  memoryId: number,
+  content: string,
+  category?: 'basic' | 'psych',
+): Promise<MemoryItem> {
   const res = await api(`/api/memories/${memoryId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify(category ? { content, category } : { content }),
   })
   if (!res.ok) {
     const detail = await res.json().catch(() => null)

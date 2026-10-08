@@ -146,3 +146,25 @@
 .m-item .m-item-ops {
   justify-content: flex-end;
 }
+
+/* 编辑态分类切换（11：把放错的记忆归位） */
+.m-cat-switch {
+  display: flex;
+  gap: 16px;
+}
+.m-cat {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+  letter-spacing: 1px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid transparent;
+  transition: color 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.m-cat:hover {
+  color: var(--ink-1);
+}
+.m-cat.on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}

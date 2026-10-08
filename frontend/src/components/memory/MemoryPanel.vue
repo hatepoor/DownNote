@@ -13,7 +13,7 @@ const COLUMNS: { key: Category; title: string; hint: string; empty: string }[] =
   {
     key: 'basic',
     title: '基本信息',
-    hint: '关于你的名字、生日、生活状态。',
+    hint: '关于你的名字、生日、家乡、学校这类身份信息。',
     empty: '它会在这里记下关于你的事，你也可以自己写下来。',
   },
   {
@@ -26,6 +26,7 @@ const COLUMNS: { key: Category; title: string; hint: string; empty: string }[] =
 
 const editingId = ref<number | null>(null)
 const editingText = ref('')
+const editingCategory = ref<Category | null>(null)
 const addingCategory = ref<Category | null>(null)
 const addingText = ref('')
 const confirmingId = ref<number | null>(null)
@@ -79,11 +80,13 @@ function startEdit(memory: MemoryItem): void {
   addingCategory.value = null
   editingId.value = memory.id
   editingText.value = memory.content
+  editingCategory.value = memory.category
 }
 
 function cancelEdit(): void {
   editingId.value = null
   editingText.value = ''
+  editingCategory.value = null
 }
 
 async function saveEdit(): Promise<void> {
@@ -91,7 +94,7 @@ async function saveEdit(): Promise<void> {
   if (editingId.value === null || !content) return
   errorText.value = ''
   try {
-    await updateMemory(editingId.value, content)
+    await updateMemory(editingId.value, content, editingCategory.value ?? undefined)
     cancelEdit()
     await refreshMemories()
   } catch (e) {
@@ -154,6 +157,17 @@ async function saveAdd(category: Category): Promise<void> {
         <ul class="m-list">
           <li v-for="memory in itemsOf(col.key)" :key="memory.id" class="m-item">
             <template v-if="editingId === memory.id">
+              <div class="m-cat-switch" role="group" aria-label="记忆分类">
+                <button
+                  v-for="col in COLUMNS"
+                  :key="col.key"
+                  class="m-cat"
+                  :class="{ on: editingCategory === col.key }"
+                  @click="editingCategory = col.key"
+                >
+                  {{ col.title }}
+                </button>
+              </div>
               <textarea v-model="editingText" class="m-edit" rows="2" />
               <div class="m-item-ops">
                 <button class="m-link" @click="cancelEdit">取消</button>

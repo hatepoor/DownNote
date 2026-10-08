@@ -124,3 +124,24 @@ def test_memoryToolsNotifyFrontend(dbFile, monkeypatch):
     assert "不存在" in memoryUpdateTool.updateMemory.invoke({"memoryId": 999, "content": "x"})
     assert "不存在" in memoryDeleteTool.deleteMemory.invoke({"memoryId": 999})
     assert calls == []
+
+
+def test_updateMemoryToolCanRecategorize(dbFile):
+    """工具也能改分类（维护自愈用）：带 category 归位；非法分类直接返回错误、不动库。"""
+    with database.getDb(dbFile) as db:
+        memoryId = models.addLongTermMemory(db, "basic", "用户喜欢看漫画解说", updatedBy="agent")
+
+    reply = memoryUpdateTool.updateMemory.invoke(
+            {"memoryId": memoryId, "content": "用户喜欢看漫画解说", "category": "psych"}
+        )
+    assert "已更新" in reply
+    with database.getDb(dbFile) as db:
+        assert models.getLongTermMemory(db, memoryId).category == "psych"
+
+    assert memoryUpdateTool.updateMemory.invoke(
+            {"memoryId": memoryId, "content": "x", "category": "hobby"}
+        ) == "category 只能是 basic 或 psych"
+    with database.getDb(dbFile) as db:
+        kept = models.getLongTermMemory(db, memoryId)
+        assert kept.category == "psych"
+        assert kept.content == "用户喜欢看漫画解说"
