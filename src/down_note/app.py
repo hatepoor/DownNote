@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
     database.ensureSchema()
     scheduler.startScheduler()
     yield
+    scheduler.stopScheduler()
 
 
 def createApp() -> FastAPI:

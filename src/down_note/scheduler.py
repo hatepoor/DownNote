@@ -2,9 +2,11 @@
 
 日整合：已结束的日子把当天条目纯程序拼接成一篇日记（kind="daily"），
 随后由兜底扫描分析出"日心情"，再交记忆管理子智能体沉淀长期记忆。
+两个定时任务都在启动时先跑一次（next_run_time=now）——用户的用法多是"开一会儿就关"，
+首次执行排在 30 分钟后会永远等不到（见 docx/v0.1.2/modules/12-日整合即时补跑.md）。
 启动时恢复上次中断的分析任务（running → pending）。
 对应开发文档：docx/v0.1.0/modules/05-分析管线.md、07-长期记忆.md、11-日整合与交互修订.md、
-docx/v0.1.2/modules/02-分析提速.md
+docx/v0.1.2/modules/02-分析提速.md、docx/v0.1.2/modules/12-日整合即时补跑.md
 """
 
 import logging
@@ -16,6 +18,7 @@ from down_note import config
 from down_note.agent import memoryAgent
 from down_note.agent.context import buildMemoriesText, buildMoodsText, buildTranscript, nowIso
 from down_note.core import analysis
+from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker
 from down_note.db import database, models
 
 SCAN_INTERVAL_MINUTES = 30
@@ -25,7 +28,10 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def consolidatePastDays() -> None:
-    """把已结束日子的当天条目整合成一篇日记（纯程序，不调模型）；幂等。"""
+    """把已结束日子的当天条目整合成一篇日记（纯程序，不调模型）；幂等。
+
+    新建整合日记后推一条事件：正开着那一天的日页会即时刷新出"这一天的心情"与分析状态。
+    """
     today = date.today().isoformat()
     with database.getDb() as db:
         days = models.listPastDaysMissingDigest(db, today)
@@ -38,7 +44,11 @@ def consolidatePastDays() -> None:
                     )
                 if not content:
                     continue
-                models.addDailyEntry(db, day, content)
+                digestId = models.addDailyEntry(db, day, content)
+            broker.publish(
+                    ENTRY_EVENTS_CHANNEL,
+                    {"type": "digest", "entryId": digestId, "analyzeState": models.ANALYZE_PENDING},
+                )
             logging.getLogger(__name__).info("日整合完成：%s（%s 条）", day, len(entries))
         except Exception:
             logging.getLogger(__name__).exception("日期 %s 整合失败", day)
@@ -127,7 +137,11 @@ def scanAndConsolidate() -> None:
 
 
 def startScheduler() -> None:
-    """启动兜底扫描与记忆维护调度器；重复调用幂等（lifespan 与测试环境多次创建应用）。"""
+    """启动兜底扫描与记忆维护调度器；重复调用幂等（lifespan 与测试环境多次创建应用）。
+
+    两个任务都设 next_run_time=now——应用打开就先在后台补跑一次（不阻塞窗口显示），
+    否则"开一会儿就关"的用法永远等不到首次执行（2026-10-12 用户实测：四天没出整合日记）。
+    """
     global _scheduler
     if _scheduler is not None and _scheduler.running:
         return
@@ -138,11 +152,23 @@ def startScheduler() -> None:
             "interval",
             minutes=SCAN_INTERVAL_MINUTES,
             id="scan-and-consolidate",
+            next_run_time=datetime.now(),
         )
     _scheduler.add_job(
             maintainMemories,
             "interval",
             minutes=MAINTENANCE_INTERVAL_MINUTES,
             id="maintain-memories",
+            next_run_time=datetime.now(),
         )
     _scheduler.start()
+
+
+def stopScheduler() -> None:
+    """停止调度器并复位全局（应用退出与测试收尾用；未启动时为空操作）。"""
+    global _scheduler
+    if _scheduler is None:
+        return
+    if _scheduler.running:
+        _scheduler.shutdown(wait=False)
+    _scheduler = None

@@ -1,11 +1,13 @@
-"""日整合与日记记忆沉淀测试：kind 迁移、整合幂等、日心情、记忆沉淀标记、按天接口。
+"""日整合与日记记忆沉淀测试：kind 迁移、整合幂等、日心情、记忆沉淀标记、按天接口、启动即补跑。
 
-对应模块：docx/v0.1.0/modules/11-日整合与交互修订.md
+对应模块：docx/v0.1.0/modules/11-日整合与交互修订.md、docx/v0.1.2/modules/12-日整合即时补跑.md
 """
 
+import asyncio
 import json
 import sqlite3
-from datetime import date
+import time
+from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
@@ -18,6 +20,7 @@ from down_note.agent import llm as agentLlm
 from down_note.agent import memoryAgent
 from down_note.agent.tools import queryDiaries
 from down_note.app import createApp
+from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker
 from down_note.db import database, models
 
 TODAY = date.today().isoformat()
@@ -306,3 +309,47 @@ def test_queryDiariesByDateAndKeyword(dbFile):
     # 日期 + 关键词取交集（该天没有含此词的内容）
     both = queryDiaries.invoke({"date": "2026-10-05", "keyword": "风很大"})
     assert "没有包含" in both
+
+
+def test_consolidatePublishesDigestEvent(dataDir, dbFile):
+    """新建整合日记后推一条事件：正开着该天的日页会即时刷新（否则要切走再回来）。"""
+    with database.getDb() as db:
+        models.addEntry(db, "一句话。", None, "2026-10-05T21:00:00")
+
+    async def _drive() -> dict:
+        queue = broker.subscribe(ENTRY_EVENTS_CHANNEL)
+        try:
+            scheduler.consolidatePastDays()
+            return await asyncio.wait_for(queue.get(), timeout=1)
+        finally:
+            broker.unsubscribe(ENTRY_EVENTS_CHANNEL, queue)
+
+    event = asyncio.run(_drive())
+    assert event["type"] == "digest"
+    assert event["analyzeState"] == "pending"
+    with database.getDb() as db:
+        digest = models.getDailyEntry(db, "2026-10-05")
+        assert digest is not None and digest.id == event["entryId"]
+
+
+def test_schedulerBackfillsDigestOnStart(dataDir, dbFile):
+    """启动即补跑：打开应用后不用等 30 分钟，积压的日整合立刻完成（12-日整合即时补跑）。"""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    with database.getDb() as db:
+        models.addEntry(db, "昨天写的一句。", None, f"{yesterday}T21:00:00")
+
+    scheduler.stopScheduler()  # 防残留：别的用例用 with TestClient 起过调度器时先收干净
+    scheduler.startScheduler()
+    try:
+        deadline = time.time() + 8
+        digest = None
+        while time.time() < deadline:
+            with database.getDb() as db:
+                digest = models.getDailyEntry(db, yesterday)
+            if digest is not None:
+                break
+            time.sleep(0.1)
+        assert digest is not None, "启动后 8 秒内应补出昨天的整合日记"
+        assert digest.content == "昨天写的一句。"
+    finally:
+        scheduler.stopScheduler()
