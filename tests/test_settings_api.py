@@ -1,4 +1,4 @@
-"""陪伴与人格设置接口测试：默认值、档位校验、soul.md 读写与 2000 字上限。
+"""陪伴与人格设置接口测试：默认值、档位校验、soul.md 读写与字数上限。
 
 对应模块：docx/v0.2.0/modules/02-设置整理.md
 """
@@ -40,7 +40,7 @@ def test_personaDefaultsToShippedOne(dbFile):
     body = _client().get("/api/settings/persona").json()
     assert body["enabled"] is False
     assert body["content"] == ""
-    assert body["maxLength"] == 2000
+    assert body["maxLength"] == persona.CONTENT_MAX_LENGTH
     assert "怎么说话（最重要）" in body["defaultPersona"]
     assert "{memories}" not in body["defaultPersona"]
 
@@ -64,9 +64,10 @@ def test_personaWriteAndReadBack(dbFile, dataDir):
 
 
 def test_personaRejectsOverlong(dbFile):
-    """> 2000 字拒绝保存，且旧内容不被破坏（前端提示精简后再保存）。"""
+    """超上限拒绝保存，且旧内容不被破坏（前端提示精简后再保存）。"""
     client = _client()
     client.put("/api/settings/persona", json={"enabled": True, "content": "短内容"})
-    resp = client.put("/api/settings/persona", json={"enabled": True, "content": "长" * 2001})
+    overlong = "长" * (persona.CONTENT_MAX_LENGTH + 1)
+    resp = client.put("/api/settings/persona", json={"enabled": True, "content": overlong})
     assert resp.status_code == 400
     assert client.get("/api/settings/persona").json()["content"] == "短内容"

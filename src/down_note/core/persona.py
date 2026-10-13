@@ -15,7 +15,7 @@ from down_note.db import models
 
 SOUL_FILE_NAME = "soul.md"
 PERSONA_ENABLED_KEY = "persona_enabled"  # settings 键：自定义人格开关（"1"/"0"）
-CONTENT_MAX_LENGTH = 2000  # 去首尾空白后的字符数上限
+CONTENT_MAX_LENGTH = 6000  # 去首尾空白后的字符数上限
 
 
 def getSoulFile() -> Path:
@@ -39,7 +39,7 @@ def isPersonaEnabled(db: Session) -> bool:
 
 
 def normalizeContent(raw: str) -> str:
-    """规整并校验自定义内容；超过 2000 字抛 ValueError（调用方转 400）。"""
+    """规整并校验自定义内容；超过 CONTENT_MAX_LENGTH 字抛 ValueError（调用方转 400）。"""
     content = raw.strip()
     if len(content) > CONTENT_MAX_LENGTH:
         raise ValueError(f"人格内容最多 {CONTENT_MAX_LENGTH} 字，请精简后再保存")

@@ -9,7 +9,7 @@ import ToggleSwitch from '../shell/ToggleSwitch.vue'
 const enabled = ref(false)
 const content = ref('')
 const defaultPersona = ref('')
-const maxLength = ref(2000)
+const maxLength = ref(6000)
 const saving = ref(false)
 const loading = ref(false)
 const hint = ref('')
