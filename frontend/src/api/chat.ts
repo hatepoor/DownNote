@@ -65,3 +65,8 @@ export async function fetchChatSessions(): Promise<ChatSessionItem[]> {
   if (!res.ok) throw new Error('拉取会话失败')
   return res.json()
 }
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  const res = await api(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('删除失败，可重试')
+}

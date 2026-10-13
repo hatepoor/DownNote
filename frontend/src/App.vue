@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 应用骨架：窄栏 + 主区域（工作台：日记 + 对话，可拖拽分栏；记忆页）+ 抽屉 + 配置弹窗。
+// 应用骨架：窄栏 + 主区域（工作台：日记 + 对话，可拖拽分栏；记忆页）+ 抽屉 + 设置弹窗。
 import { onMounted, onUnmounted, ref } from 'vue'
 
 import { fetchEntries } from './api'
@@ -8,10 +8,11 @@ import DegradedBanner from './components/shell/DegradedBanner.vue'
 import DiaryHistoryDrawer from './components/diary/DiaryHistoryDrawer.vue'
 import DiaryPanel from './components/diary/DiaryPanel.vue'
 import MemoryPanel from './components/memory/MemoryPanel.vue'
-import ModelConfigDialog from './components/shell/ModelConfigDialog.vue'
 import OnboardingGuide from './components/shell/OnboardingGuide.vue'
+import SettingsDialog from './components/shell/SettingsDialog.vue'
 import TitleBar from './components/shell/TitleBar.vue'
 import { bindTitlebarSync, currentView, degraded, isShell, refreshConfig, switchView, theme, toggleTheme } from './stores/appState'
+import { startNotifyBridge } from './stores/notify'
 import { hasSeenOnboarding, markOnboardingDone } from './stores/onboarding'
 import { todayString } from './utils/time'
 
@@ -109,6 +110,7 @@ function finishOnboarding(): void {
 
 onMounted(async () => {
   bindTitlebarSync()
+  void startNotifyBridge() // 系统通知桥：主动开口 → 通知 → 回窗落到对应会话（01 模块）
   await refreshConfig()
   const saved = Number(localStorage.getItem(DIARY_WIDTH_KEY))
   if (saved) diaryWidth.value = clampDiaryWidth(saved)
@@ -212,7 +214,7 @@ onUnmounted(() => {
 
     <DiaryHistoryDrawer v-model:open="drawerOpen" @select-day="onSelectDay" />
     <Transition name="ink">
-      <ModelConfigDialog
+      <SettingsDialog
         v-if="dialogOpen"
         @close="dialogOpen = false"
         @saved="refreshConfig"

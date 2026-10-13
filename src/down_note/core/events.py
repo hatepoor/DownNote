@@ -1,11 +1,11 @@
 """进程内事件总线 + 每会话回合闸门。
 
 事件总线：后台任务完成 → 前端推送（每会话常驻 SSE 事件流订阅，无订阅者时事件自然消散）；
-分析状态与长期记忆变更也走同一总线（ENTRY_EVENTS_CHANNEL / MEMORY_EVENTS_CHANNEL，
-全局频道，单用户应用不分会话）。
+分析状态、长期记忆变更与主动开口通知都走同一总线（ENTRY_EVENTS_CHANNEL /
+MEMORY_EVENTS_CHANNEL / NOTIFY_EVENTS_CHANNEL，全局频道，单用户应用不分会话）。
 回合闸门：回合执行与回顾注入互斥——注入永不打断回合、永不丢失（等回合结束再写）。
 对应开发文档：docx/v0.1.0/modules/08-对话Agent.md、docx/v0.1.2/modules/02-分析提速.md、
-docx/v0.1.2/modules/10-记忆即时可见.md
+docx/v0.1.2/modules/10-记忆即时可见.md、docx/v0.2.0/modules/01-托盘常驻与系统通知.md
 """
 
 import asyncio
@@ -14,6 +14,7 @@ import threading
 
 ENTRY_EVENTS_CHANNEL = "entries"  # 分析状态推送频道（单用户应用，不分会话）
 MEMORY_EVENTS_CHANNEL = "memories"  # 长期记忆变更推送频道（同上，全局）
+NOTIFY_EVENTS_CHANNEL = "notify"  # 主动开口的通知推送频道（同上，全局）
 
 
 def sseFrame(event: dict) -> str:
@@ -54,6 +55,14 @@ broker = EventBroker()
 def notifyMemoryChanged() -> None:
     """长期记忆新增 / 修改 / 删除成功后调用：通知前端刷新记忆列表。任意线程可调。"""
     broker.publish(MEMORY_EVENTS_CHANNEL, {"type": "memory"})
+
+
+def notifyProactiveMessage(sessionId: str, title: str, body: str) -> None:
+    """主动开口落库后调用：推通知事件，前端弹系统通知并绑定会话。任意线程可调。"""
+    broker.publish(
+            NOTIFY_EVENTS_CHANNEL,
+            {"type": "notify", "sessionId": sessionId, "title": title, "body": body},
+        )
 
 
 _turnLocks: dict[str, threading.Lock] = {}

@@ -39,10 +39,18 @@ from down_note.db.models.memory import (
         listLongTermMemories,
         updateLongTermMemory,
     )
-from down_note.db.models.message import Message, addMessage, firstUserMessage, listMessages
+from down_note.db.models.message import (
+        Message,
+        addMessage,
+        deleteSessionMessages,
+        firstUserMessage,
+        hasUserMessageSince,
+        listMessages,
+    )
 from down_note.db.models.mood import Mood, clearMood, getMoodByEntry, listRecentMoods, upsertMood
 from down_note.db.models.session import (
         ChatSession,
+        deleteChatSession,
         listRecentSessions,
         listSessionsNeedingMaintenance,
         markSessionMaintained,

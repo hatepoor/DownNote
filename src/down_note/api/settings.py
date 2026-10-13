@@ -2,18 +2,26 @@
 
 api_key 只存 .env：GET 只回掩码，PUT 时空 key 表示"保持原密钥不变"。
 温度与思考强度存 settings 表（0–2 / 空串=不传），保存即生效。
-对应开发文档：docx/v0.1.0/modules/03-模型接口.md、12-体验修订.md
+v0.2.0 02 起同一路由承载陪伴设置（开关 + 档位）与人格设置（开关 + soul.md 内容）。
+对应开发文档：docx/v0.1.0/modules/03-模型接口.md、12-体验修订.md、
+docx/v0.2.0/modules/02-设置整理.md
 """
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from down_note import config
+from down_note.agent.prompts.companion import DEFAULT_PERSONA
+from down_note.core import persona
 from down_note.db import database, models
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 REASONING_EFFORTS = ("", "low", "medium", "high")  # "" = 不向模型传该参数
+COMPANION_TIERS = ("cold", "normal", "caring")  # 冷淡 / 正常 / 关心
+DEFAULT_COMPANION_TIER = "normal"
+COMPANION_ENABLED_KEY = "companion_enabled"  # settings 键：主动陪伴开关（"1"/"0"）
+COMPANION_TIER_KEY = "companion_tier"
 
 
 class ModelSettingsRead(BaseModel):
@@ -31,6 +39,28 @@ class ModelSettingsWrite(BaseModel):
     apiKey: str = ""
     temperature: float = config.DEFAULT_TEMPERATURE
     reasoningEffort: str = config.DEFAULT_REASONING_EFFORT
+
+
+class CompanionSettingsRead(BaseModel):
+    enabled: bool
+    tier: str
+
+
+class CompanionSettingsWrite(BaseModel):
+    enabled: bool
+    tier: str = DEFAULT_COMPANION_TIER
+
+
+class PersonaSettingsRead(BaseModel):
+    enabled: bool
+    content: str
+    defaultPersona: str
+    maxLength: int
+
+
+class PersonaSettingsWrite(BaseModel):
+    enabled: bool
+    content: str = ""
 
 
 @router.get("/model")
@@ -60,4 +90,46 @@ def saveModelSettings(body: ModelSettingsWrite) -> dict[str, bool]:
         models.setSetting(db, "reasoning_effort", body.reasoningEffort)
     if body.apiKey:
         config.setApiKey(body.apiKey)
+    return {"ok": True}
+
+
+@router.get("/companion")
+def getCompanionSettings() -> CompanionSettingsRead:
+    with database.getDb() as db:
+        enabled = models.getSetting(db, COMPANION_ENABLED_KEY) == "1"
+        tier = models.getSetting(db, COMPANION_TIER_KEY) or DEFAULT_COMPANION_TIER
+    return CompanionSettingsRead(enabled=enabled, tier=tier)
+
+
+@router.put("/companion")
+def saveCompanionSettings(body: CompanionSettingsWrite) -> dict[str, bool]:
+    if body.tier not in COMPANION_TIERS:
+        raise HTTPException(status_code=400, detail="档位取值不合法")
+    with database.getDb() as db:
+        models.setSetting(db, COMPANION_ENABLED_KEY, "1" if body.enabled else "0")
+        models.setSetting(db, COMPANION_TIER_KEY, body.tier)
+    return {"ok": True}
+
+
+@router.get("/persona")
+def getPersonaSettings() -> PersonaSettingsRead:
+    with database.getDb() as db:
+        enabled = persona.isPersonaEnabled(db)
+    return PersonaSettingsRead(
+            enabled=enabled,
+            content=persona.readCustomPersona(),
+            defaultPersona=DEFAULT_PERSONA,
+            maxLength=persona.CONTENT_MAX_LENGTH,
+        )
+
+
+@router.put("/persona")
+def savePersonaSettings(body: PersonaSettingsWrite) -> dict[str, bool]:
+    try:
+        content = persona.normalizeContent(body.content)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    persona.writeCustomPersona(content)
+    with database.getDb() as db:
+        models.setSetting(db, persona.PERSONA_ENABLED_KEY, "1" if body.enabled else "0")
     return {"ok": True}

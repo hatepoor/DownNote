@@ -11,9 +11,11 @@ from fastapi.staticfiles import StaticFiles
 
 from down_note import config, scheduler
 from down_note.api.chat import router as chatRouter
+from down_note.api.companion import router as companionRouter
 from down_note.api.diaries import router as diariesRouter
 from down_note.api.entries import router as entriesRouter
 from down_note.api.memories import router as memoriesRouter
+from down_note.api.notify import router as notifyRouter
 from down_note.api.settings import router as settingsRouter
 from down_note.db import database
 
@@ -50,6 +52,8 @@ def createApp() -> FastAPI:
     app.include_router(entriesRouter)
     app.include_router(diariesRouter)
     app.include_router(memoriesRouter)
+    app.include_router(notifyRouter)
+    app.include_router(companionRouter)
     app.include_router(chatRouter)
 
     @app.get("/api/health")

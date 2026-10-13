@@ -5,14 +5,16 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import {
   fetchChatHistory,
+  fetchChatSessions,
   openChatEvents,
+  reportCompanionActivity,
   sendChatMessage,
   wakeChat,
   type ChatMessageItem,
   type ChatStreamEvent,
   type Hotline,
 } from '../../api'
-import { degraded, refreshConfig } from '../../stores/appState'
+import { degraded, pendingSessionId, refreshConfig } from '../../stores/appState'
 import { useScrollFade } from '../../utils/scrollFade'
 import ChatBubble from './ChatBubble.vue'
 import ChatHistoryDrawer from './ChatHistoryDrawer.vue'
@@ -58,6 +60,7 @@ function handleStreamEvent(e: ChatStreamEvent): void {
       streamingText.value = ''
     }
     streaming.value = false
+    reportCompanionActivity('chat') // 对话中（05 让路判据）
   } else if (e.type === 'error') {
     turnError.value = e.message
     streaming.value = false
@@ -67,8 +70,8 @@ function handleStreamEvent(e: ChatStreamEvent): void {
 async function openEvents(): Promise<void> {
   eventSource?.close()
   eventSource = await openChatEvents(sessionId.value!, (e) => {
-    // 回顾结果回流：以"它"的气泡追加，不打断任何正在流式的回合
-    if (e.type === 'recall' && e.message) {
+    // 回顾结果回流 / 主动开口落进当前会话：以"它"的气泡追加，不打断正在流式的回合
+    if ((e.type === 'recall' || e.type === 'message') && e.message) {
       messages.value.push({ ...e.message, id: Date.now() })
       wakeNoteVisible.value = false
     }
@@ -99,6 +102,7 @@ async function send(): Promise<void> {
   input.value = ''
   turnError.value = ''
   streaming.value = true
+  reportCompanionActivity('chat') // 对话中（05 让路判据）
   try {
     await sendChatMessage(sessionId.value!, content, handleStreamEvent)
   } catch (e) {
@@ -129,10 +133,56 @@ async function loadSession(id: string): Promise<void> {
   await openEvents()
 }
 
+// 回到空态：没有当前会话（删光了、或落点会话已不存在）
+function clearSession(): void {
+  eventSource?.close()
+  eventSource = null
+  sessionId.value = null
+  messages.value = []
+  streamingText.value = ''
+  hotlines.value = null
+  wakeNoteVisible.value = false
+  turnError.value = ''
+}
+
+// 通知点击（窗口被唤起）→ 落到产生该消息的会话（01 模块）
+watch(pendingSessionId, (id) => {
+  if (!id) return
+  void openFromNotification(id)
+})
+
+async function openFromNotification(id: string): Promise<void> {
+  try {
+    if (id !== sessionId.value) await loadSession(id)
+  } catch {
+    // 目标会话可能已被删除：忽略即可（界面收口由 onSessionDeleted 负责）
+  } finally {
+    pendingSessionId.value = null
+  }
+}
+
+// 抽屉里删了会话（03 模块）：删的是当前打开的那条 → 切到最近活跃会话，没有则回空态
+async function onSessionDeleted(id: string): Promise<void> {
+  if (id !== sessionId.value) return
+  try {
+    const sessions = await fetchChatSessions()
+    if (sessions.length > 0) await loadSession(sessions[0].sessionId)
+    else clearSession()
+  } catch {
+    clearSession()
+  }
+}
+
 function autoGrow(event: Event): void {
   const el = event.target as HTMLTextAreaElement
   el.style.height = 'auto'
   el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+}
+
+// 输入框：自适应高度 + 上报"正在对话中"（05 让路判据，api 内部节流 30 秒）
+function onComposeInput(event: Event): void {
+  autoGrow(event)
+  reportCompanionActivity('chat')
 }
 
 function onEnter(event: KeyboardEvent): void {
@@ -200,7 +250,7 @@ onUnmounted(() => eventSource?.close())
         v-model="input"
         rows="1"
         placeholder="想说点什么…"
-        @input="autoGrow"
+        @input="onComposeInput"
         @keydown.enter="onEnter"
       />
       <button class="btn-send" :disabled="!canSend" @click="send">发送</button>
@@ -212,6 +262,11 @@ onUnmounted(() => eventSource?.close())
       </p>
     </footer>
 
-    <ChatHistoryDrawer v-model:open="historyOpen" :current="sessionId" @select="loadSession" />
+    <ChatHistoryDrawer
+      v-model:open="historyOpen"
+      :current="sessionId"
+      @select="loadSession"
+      @delete="onSessionDeleted"
+    />
   </section>
 </template>

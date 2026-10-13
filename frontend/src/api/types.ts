@@ -30,6 +30,18 @@ export interface ModelSettings {
   configured: boolean
 }
 
+export interface CompanionSettings {
+  enabled: boolean
+  tier: string
+}
+
+export interface PersonaSettings {
+  enabled: boolean
+  content: string
+  defaultPersona: string
+  maxLength: number
+}
+
 export interface ChatMessageItem {
   id: number
   role: 'user' | 'assistant'
@@ -79,4 +91,11 @@ export interface DiaryDayDetail {
   day: string
   digest: EntryItem | null
   entries: EntryItem[]
+}
+
+export interface NotifyEvent {
+  type: 'notify'
+  sessionId: string
+  title: string
+  body: string
 }

@@ -1,29 +1,34 @@
-"""对话接口：唤醒、回合、历史、会话列表、事件通道。
+"""对话接口：唤醒、回合、历史、会话列表、事件通道、会话删除。
 
-SSE 协议——回合流：start/delta/meta/done/error；事件通道：recall（v0.2 起还有 care 等）。
+SSE 协议——回合流：start/delta/meta/done/error；事件通道：recall / message（v0.2 起）。
 回合执行与回顾注入共用每会话回合闸门；短期记忆双写（messages 表 + checkpointer）。
-对应开发文档：docx/v0.1.0/modules/08-对话Agent.md
+系统提示词装配（含用户自定义人格）与刷新统一在 agent.context，唤醒与主动开口共用。
+对应开发文档：docx/v0.1.0/modules/08-对话Agent.md、docx/v0.2.0/modules/04-人格模板.md
 """
 
 import asyncio
 import json
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from down_note import config
 from down_note.agent import llm, mainAgent
 from down_note.agent.checkpointer import getCheckpointer
 from down_note.agent.context import (
-    buildDiariesText,
-    buildMemoriesText,
-    buildSystemPrompt,
-    nowIso,
-)
+        buildDiariesText,
+        buildMemoriesText,
+        buildSystemPrompt,
+        forgetPromptBlocks,
+        nowIso,
+        primePromptBlocks,
+        promptBlocks,
+        refreshSystemPrompt,
+        resolvePersonaText,
+    )
 from down_note.agent.prompts import WAKE_INSTRUCTION
 from down_note.agent.tools import getCurrentTime
 from down_note.core import crisis
@@ -60,54 +65,15 @@ def _sse(event: dict) -> str:
 
 
 def _loadContext() -> tuple:
-    """会话级公共装配：配置 + 长期记忆 + 最近日记（一次性查库）。"""
+    """会话级公共装配：配置 + 长期记忆 + 最近日记 + 生效人格（一次性查库）。"""
     with database.getDb() as db:
         cfg = config.getModelServiceConfig(db)
         if not cfg.isConfigured():
             raise HTTPException(status_code=409, detail="未配置模型，无法对话")
         memoriesText = buildMemoriesText(models.listLongTermMemories(db))
         diariesText = buildDiariesText(models.listEntriesWithMood(db, limit=10, offset=0))
-    return cfg, memoriesText, diariesText
-
-
-# 会话 → (长期记忆, 最近日记, 日期)：用于判断系统提示词是否过期（① 记忆即时生效）
-_sessionBlocks: dict[str, tuple[str, str, str]] = {}
-
-
-def _currentBlocks() -> tuple[str, str, str]:
-    """当前「长期记忆 + 最近日记 + 日期」快照。"""
-    with database.getDb() as db:
-        memoriesText = buildMemoriesText(models.listLongTermMemories(db))
-        diariesText = buildDiariesText(models.listEntriesWithMood(db, limit=10, offset=0))
-    return memoriesText, diariesText, datetime.now().strftime("%Y年%m月%d日")
-
-
-def _refreshSystemPrompt(graph, sessionId: str) -> None:
-    """记忆/日记有变化（或应用重启后首次）才重建系统提示并原位替换。
-
-    稳态（无变化）不动任何消息，保持追加式与前缀缓存；
-    变化时删除旧 SystemMessage 再追加新的（放回合末尾，模型以最新为准）。
-    """
-    blocks = _currentBlocks()
-    if _sessionBlocks.get(sessionId) == blocks:
-        return
-    memoriesText, diariesText, _dateText = blocks
-    systemText = buildSystemPrompt(memoriesText, diariesText, getCurrentTime.invoke({}))
-    graphConfig = {"configurable": {"thread_id": sessionId}}
-    state = graph.get_state(graphConfig)
-    staleIds = [
-            message.id
-            for message in (state.values.get("messages") or [])
-            if isinstance(message, SystemMessage) and message.id
-        ]
-    graph.update_state(
-            graphConfig,
-            {"messages": [
-                    *(RemoveMessage(id=messageId) for messageId in staleIds),
-                    SystemMessage(content=systemText),
-                ]},
-        )
-    _sessionBlocks[sessionId] = blocks
+        personaText = resolvePersonaText(db)
+    return cfg, memoriesText, diariesText, personaText
 
 
 def _streamAgentTurn(sessionId: str, cfg, messages: list):
@@ -118,7 +84,7 @@ def _streamAgentTurn(sessionId: str, cfg, messages: list):
         replyText = ""
         with turnLock(sessionId):
             graph = mainAgent.buildMainAgent(cfg, getCheckpointer(), sessionId)
-            _refreshSystemPrompt(graph, sessionId)
+            refreshSystemPrompt(graph, sessionId, getCurrentTime.invoke({}))
             try:
                 for chunk, meta in graph.stream(
                         {"messages": messages},
@@ -143,16 +109,16 @@ def _streamAgentTurn(sessionId: str, cfg, messages: list):
 
 @router.post("/wake")
 def wake() -> StreamingResponse:
-    """新的唤醒：建会话，主图带着长期记忆与最近日记流式开场。"""
+    """新的唤醒：建会话，主图带着长期记忆、最近日记与生效人格流式开场。"""
     sessionId = uuid.uuid4().hex
-    cfg, memoriesText, diariesText = _loadContext()
+    cfg, memoriesText, diariesText, personaText = _loadContext()
     with database.getDb() as db:
         models.upsertChatSession(db, sessionId, nowIso())
     hasDiaries = bool(diariesText)
 
-    systemText = buildSystemPrompt(memoriesText, diariesText, getCurrentTime.invoke({}))
+    systemText = buildSystemPrompt(memoriesText, diariesText, getCurrentTime.invoke({}), personaText)
     messages = [SystemMessage(content=systemText), HumanMessage(content=WAKE_INSTRUCTION)]
-    _sessionBlocks[sessionId] = (memoriesText, diariesText, datetime.now().strftime("%Y年%m月%d日"))
+    primePromptBlocks(sessionId, promptBlocks(memoriesText, diariesText, personaText))
 
     def eventStream():
         yield _sse({"type": "start", "sessionId": sessionId, "wakeNote": hasDiaries})
@@ -264,6 +230,21 @@ def chatSessions() -> list[ChatSessionRead]:
                 for s in sessions
             ]
     return result
+
+
+@router.delete("/sessions/{sessionId}", status_code=204)
+def deleteChatSession(sessionId: str) -> None:
+    """删掉这次对话本身：消息 + 会话 + 图状态（checkpoint）三处物理清，幂等。
+
+    长期记忆一律不动（用户口径："只删这次对话，仅此而已"）；重复删除无副作用。
+    checkpoint 先清（SqliteSaver.delete_thread 自带幂等建表）——图状态残留会让
+    模型在删完后仍能复述这段对话。
+    """
+    getCheckpointer().delete_thread(sessionId)
+    with database.getDb() as db:
+        models.deleteSessionMessages(db, sessionId)
+        models.deleteChatSession(db, sessionId)
+    forgetPromptBlocks(sessionId)
 
 
 async def chatEventStream(sessionId: str):

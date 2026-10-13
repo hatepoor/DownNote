@@ -4,7 +4,23 @@
 export * from './types'
 export { apiHealth } from './http'
 export { fetchEntries, submitEntry, updateEntry, reanalyzeEntry, openEntryEvents } from './entries'
-export { fetchModelSettings, saveModelSettings } from './settings'
-export { wakeChat, sendChatMessage, openChatEvents, fetchChatHistory, fetchChatSessions } from './chat'
+export {
+  fetchModelSettings,
+  saveModelSettings,
+  fetchCompanionSettings,
+  saveCompanionSettings,
+  fetchPersonaSettings,
+  savePersonaSettings,
+} from './settings'
+export {
+  wakeChat,
+  sendChatMessage,
+  openChatEvents,
+  fetchChatHistory,
+  fetchChatSessions,
+  deleteChatSession,
+} from './chat'
 export { fetchMemories, createMemory, updateMemory, deleteMemory, openMemoryEvents } from './memories'
+export { openNotifyEvents } from './notify'
+export { reportCompanionActivity } from './companion'
 export { fetchDiaryDays, fetchDayDetail } from './diaries'

@@ -1,5 +1,5 @@
 // 全局应用状态（组合式单例，不引 Pinia）：
-// 模型配置 / 降级标志 / 当前视图 / 长期记忆缓存 / 日夜主题。
+// 模型配置 / 降级标志 / 当前视图 / 长期记忆缓存 / 日夜主题 / 待打开的会话。
 export {}
 
 import { computed, ref } from 'vue'
@@ -56,12 +56,21 @@ const memoriesFailed = ref(false)
 
 const theme = ref<AppTheme>('light') // 日间=信笺 | 夜间=夜笺（token 切换，见 styles/tokens.css）
 
+// 待打开的会话：系统通知把窗口唤起后，界面落到产生该消息的会话（见 stores/notify.ts）
+const pendingSessionId = ref<string | null>(null)
+
 export const degraded = computed(() => modelConfigured.value === false)
 
-export { currentView, memories, memoriesFailed, theme }
+export { currentView, memories, memoriesFailed, pendingSessionId, theme }
 
 export function switchView(view: AppView): void {
   currentView.value = view
+}
+
+// 通知点击 → 打开绑定的会话：切到工作台并把会话交给对话面板载入（ChatPanel 消费后清空）
+export function requestOpenSession(sessionId: string): void {
+  pendingSessionId.value = sessionId
+  switchView('workbench')
 }
 
 function applyTheme(next: AppTheme): void {

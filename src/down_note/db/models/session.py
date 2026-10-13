@@ -1,6 +1,7 @@
 """对话会话：开始时间、最近活跃时间与上次记忆维护时间。
 
-对应开发文档：docx/v0.1.0/modules/02-数据库与配置.md、docx/v0.1.2/modules/00-结构重构.md
+对应开发文档：docx/v0.1.0/modules/02-数据库与配置.md、docx/v0.1.2/modules/00-结构重构.md、
+docx/v0.2.0/modules/03-会话删除.md
 """
 
 from sqlalchemy import select, String
@@ -50,3 +51,12 @@ def listRecentSessions(db: Session, limit: int = 20) -> list[ChatSession]:
             .scalars()
             .all()
         )
+
+
+def deleteChatSession(db: Session, sessionId: str) -> bool:
+    """物理删除会话行（会话删除用；幂等，返回是否删到东西）。"""
+    session = db.get(ChatSession, sessionId)
+    if session is None:
+        return False
+    db.delete(session)
+    return True

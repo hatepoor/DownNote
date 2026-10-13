@@ -17,12 +17,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from down_note import config
 from down_note.agent import memoryAgent
 from down_note.agent.context import buildMemoriesText, buildMoodsText, buildTranscript, nowIso
-from down_note.core import analysis
+from down_note.core import analysis, companion
 from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker
 from down_note.db import database, models
 
 SCAN_INTERVAL_MINUTES = 30
 MAINTENANCE_INTERVAL_MINUTES = 30
+COMPANION_PATROL_MINUTES = 5  # 主动陪伴巡检（表一）：5 分钟一次，判定全是轻量程序
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -159,6 +160,13 @@ def startScheduler() -> None:
             "interval",
             minutes=MAINTENANCE_INTERVAL_MINUTES,
             id="maintain-memories",
+            next_run_time=datetime.now(),
+        )
+    _scheduler.add_job(
+            companion.patrol,
+            "interval",
+            minutes=COMPANION_PATROL_MINUTES,
+            id="companion-patrol",
             next_run_time=datetime.now(),
         )
     _scheduler.start()

@@ -4,7 +4,7 @@
 // 高度由外层 .editor-area 控制（面板内分隔栏可拖拽），文字超出时输入框内部滚动。
 import { nextTick, ref, watch } from 'vue'
 
-import { submitEntry, updateEntry, type EntryItem } from '../../api'
+import { submitEntry, updateEntry, type EntryItem, reportCompanionActivity } from '../../api'
 
 const props = defineProps<{ editEntry?: EntryItem | null }>()
 
@@ -95,6 +95,7 @@ async function submit(): Promise<void> {
       ref="textareaEl"
       v-model="content"
       :placeholder="isEditing ? '' : '此刻的心情，写下来吧'"
+      @input="reportCompanionActivity('diary')"
     />
     <div class="sheet-foot">
       <div class="attach-slot">
