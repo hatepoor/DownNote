@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from down_note import config
 from down_note.db import models
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 _engine: Engine | None = None
 
@@ -83,6 +83,8 @@ def ensureSchema(dbPath: Path | str | None = None) -> None:
             _migrateToV6(conn)
         if version < 7:
             _migrateToV7(conn)
+        if version < 8:
+            _migrateToV8(conn)
         conn.execute(text(f"PRAGMA user_version = {SCHEMA_VERSION}"))
         conn.commit()
 
@@ -124,6 +126,14 @@ def _migrateToV7(conn) -> None:
             )
     conn.execute(text("UPDATE entries SET analyze_state = 'done' WHERE analyzed = 1"))
     conn.execute(text("UPDATE entries SET analyze_state = 'pending' WHERE analyzed = 0"))
+
+
+def _migrateToV8(conn) -> None:
+    """v7 → v8：新增 entry_replies 表（一条目一回应）。
+
+    新库由 create_all 建带；旧库同样由 create_all 幂等补建——本分支仅作版本推进的
+    显式钩子，与 v3/v7 同型（新表无需补列，保持分支存在以便版本记录）。
+    """
 
 
 def _remergeDailyDigests(conn) -> None:

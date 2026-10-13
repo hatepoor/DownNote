@@ -31,6 +31,12 @@ from down_note.db.models.entry import (
         setAnalyzeState,
         updateEntryContent,
     )
+from down_note.db.models.entryReply import (
+        EntryReply,
+        createEntryReply,
+        getReplyByEntry,
+        markReplyTransferred,
+    )
 from down_note.db.models.memory import (
         LongTermMemory,
         addLongTermMemory,
