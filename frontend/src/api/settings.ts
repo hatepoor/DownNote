@@ -32,11 +32,15 @@ export async function fetchCompanionSettings(): Promise<CompanionSettings> {
   return res.json()
 }
 
-export async function saveCompanionSettings(enabled: boolean, tier: string): Promise<void> {
+export async function saveCompanionSettings(
+  enabled: boolean,
+  tier: string,
+  diaryReplyEnabled: boolean,
+): Promise<void> {
   const res = await api('/api/settings/companion', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled, tier }),
+    body: JSON.stringify({ enabled, tier, diaryReplyEnabled }),
   })
   if (!res.ok) {
     const detail = await res.json().catch(() => null)

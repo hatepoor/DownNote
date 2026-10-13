@@ -18,6 +18,7 @@ const TIER_OPTIONS: SelectOption[] = [
 
 const enabled = ref(false)
 const tier = ref('normal')
+const diaryReplyEnabled = ref(true) // 日记回应独立开关（v0.3.0 01），默认开启
 const hint = ref('')
 const errorMessage = ref('')
 
@@ -26,6 +27,7 @@ onMounted(async () => {
     const settings = await fetchCompanionSettings()
     enabled.value = settings.enabled
     tier.value = settings.tier
+    diaryReplyEnabled.value = settings.diaryReplyEnabled
   } catch {
     errorMessage.value = '读取陪伴设置失败'
   }
@@ -35,7 +37,7 @@ async function persist(): Promise<void> {
   hint.value = ''
   errorMessage.value = ''
   try {
-    await saveCompanionSettings(enabled.value, tier.value)
+    await saveCompanionSettings(enabled.value, tier.value, diaryReplyEnabled.value)
     hint.value = '已保存'
   } catch (e) {
     errorMessage.value = e instanceof Error ? e.message : '保存失败'
@@ -49,6 +51,11 @@ function onToggle(value: boolean): void {
 
 function onTier(value: string): void {
   tier.value = value
+  void persist()
+}
+
+function onReplyToggle(value: boolean): void {
+  diaryReplyEnabled.value = value
   void persist()
 }
 </script>
@@ -75,6 +82,19 @@ function onTier(value: string): void {
     <p class="f-hint">
       档位决定它开口的频率与姿态。无论哪一档，深夜都不会打扰；你不回，它也不会追着说。
     </p>
+  </div>
+  <div class="row">
+    <div class="row-text">
+      <span class="row-label">日记回应</span>
+      <p class="f-hint">
+        写完一条日记，它会在下面留一两句话。关闭后新日记不再生成回应，已经留下的还在。
+      </p>
+    </div>
+    <ToggleSwitch
+      :model-value="diaryReplyEnabled"
+      label="日记回应"
+      @update:model-value="onReplyToggle"
+    />
   </div>
   <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
   <p v-else-if="hint" class="d-note">{{ hint }}</p>

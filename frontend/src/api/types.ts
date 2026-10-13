@@ -10,6 +10,13 @@ export interface MoodItem {
   model: string
 }
 
+export interface ReplyItem {
+  replyText: string
+  createdAt: string
+  sessionId: string | null
+  transferred: boolean
+}
+
 export interface EntryItem {
   id: number
   content: string
@@ -19,6 +26,7 @@ export interface EntryItem {
   analyzeState: AnalyzeState
   kind: 'entry' | 'daily'
   mood: MoodItem | null
+  reply: ReplyItem | null
 }
 
 export interface ModelSettings {
@@ -33,6 +41,7 @@ export interface ModelSettings {
 export interface CompanionSettings {
   enabled: boolean
   tier: string
+  diaryReplyEnabled: boolean
 }
 
 export interface PersonaSettings {

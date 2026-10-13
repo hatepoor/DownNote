@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from down_note import config
 from down_note.agent.prompts.companion import DEFAULT_PERSONA
-from down_note.core import persona
+from down_note.core import entryReply, persona
 from down_note.db import database, models
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -44,11 +44,13 @@ class ModelSettingsWrite(BaseModel):
 class CompanionSettingsRead(BaseModel):
     enabled: bool
     tier: str
+    diaryReplyEnabled: bool  # 条目回应开关（v0.3.0 01）：独立于主动陪伴，默认开启
 
 
 class CompanionSettingsWrite(BaseModel):
     enabled: bool
     tier: str = DEFAULT_COMPANION_TIER
+    diaryReplyEnabled: bool = True
 
 
 class PersonaSettingsRead(BaseModel):
@@ -98,7 +100,8 @@ def getCompanionSettings() -> CompanionSettingsRead:
     with database.getDb() as db:
         enabled = models.getSetting(db, COMPANION_ENABLED_KEY) == "1"
         tier = models.getSetting(db, COMPANION_TIER_KEY) or DEFAULT_COMPANION_TIER
-    return CompanionSettingsRead(enabled=enabled, tier=tier)
+        diaryReplyEnabled = entryReply.isReplyEnabled(db)
+    return CompanionSettingsRead(enabled=enabled, tier=tier, diaryReplyEnabled=diaryReplyEnabled)
 
 
 @router.put("/companion")
@@ -108,6 +111,7 @@ def saveCompanionSettings(body: CompanionSettingsWrite) -> dict[str, bool]:
     with database.getDb() as db:
         models.setSetting(db, COMPANION_ENABLED_KEY, "1" if body.enabled else "0")
         models.setSetting(db, COMPANION_TIER_KEY, body.tier)
+        models.setSetting(db, entryReply.ENABLED_KEY, "1" if body.diaryReplyEnabled else "0")
     return {"ok": True}
 
 
