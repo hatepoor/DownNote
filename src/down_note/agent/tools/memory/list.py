@@ -10,10 +10,13 @@ from down_note.db import database, models
 
 @tool
 def listMemories() -> str:
-    """读取当前全部长期记忆，返回每条的编号、类别与内容。修改或删除前必须先调用以获取编号。"""
+    """读取当前全部长期记忆，返回每条的编号、类别、内容与记录日期。修改或删除前必须先调用以获取编号；用户说"哪天记的那条"时按返回里的日期定位到编号再操作。"""
     with database.getDb() as db:
         memories = models.listLongTermMemories(db)
     if not memories:
         return "（当前没有任何长期记忆）"
     categoryName = {"basic": "基本信息", "psych": "性格画像"}
-    return "\n".join(f"#{m.id} [{categoryName[m.category]}] {m.content}" for m in memories)
+    return "\n".join(
+            f"#{m.id} [{categoryName[m.category]}] {m.content} （记于 {m.created_at[:10]}）"
+            for m in memories
+        )
