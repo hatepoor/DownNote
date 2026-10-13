@@ -29,10 +29,14 @@ class SignalHit:
 
 
 def _dailyMood(db, now: datetime, days: int) -> dict[str, list[tuple[list[str], int]]]:
-    """以 now 为基准取最近 days 天按日聚合的心情记录：{YYYY-MM-DD: [(labels, intensity), ...]}。"""
+    """以 now 为基准取最近 days 天按日聚合的心情记录：{YYYY-MM-DD: [(labels, intensity), ...]}。
+
+    只取当天条目（kind="entry"）的心情：日整合日记的心情是同一天逐条心情的汇总，
+    混进来等于同一天被平均两次，会把不达标的日子推过阈值（误报连续低落）。
+    """
     since = (now - timedelta(days=days)).isoformat(timespec="seconds")
     result: dict[str, list] = {}
-    for createdAt, mood in models.listRecentMoods(db, limit=200):
+    for createdAt, mood in models.listRecentMoods(db, limit=200, kind="entry"):
         if createdAt < since:
             continue
         day = createdAt[:10]

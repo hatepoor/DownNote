@@ -93,6 +93,22 @@ def test_low_streak_broken_resets(db_path):
         assert signals.detectSignal(db, datetime(2026, 10, 14, 21, 0)) is None
 
 
+def test_daily_digest_mood_not_counted(db_path):
+    """日整合日记（kind=daily）的心情不计入信号取数。
+
+    日整合的心情是同一天逐条心情的汇总，混进来等于同一天被平均两次：
+    本例 10-12 逐条均值 4（未达标），加上日整合那条 9 之后会变成 6.5，误报连续低落。
+    """
+    with database.getDb() as db:
+        _mood(db, "2026-10-12", ["低落"], 4)
+        digestId = models.addDailyEntry(db, "2026-10-12", "整合正文")
+        models.upsertMood(db, entryId=digestId, labels=["低落"], intensity=9,
+                          summary="日级", crisis=False,
+                          analyzedAt="2026-10-12T23:59:59", model="m")
+        _mood(db, "2026-10-13", ["低落"], 6)
+        assert signals.detectSignal(db, datetime(2026, 10, 13, 21, 0)) is None
+
+
 def test_patrol_signal_opens_early(db_path, monkeypatch):
     """信号绕过「未到点」：冷档位 nextAt 还在明天，信号命中时本轮巡检即开口。"""
     from down_note.core import companion
@@ -103,8 +119,11 @@ def test_patrol_signal_opens_early(db_path, monkeypatch):
         models.setSetting(db, "base_url", "http://x/v1")
         models.setSetting(db, "model_name", "m")
         # 冷档位 nextAt 在很远的未来——频率逻辑本不该开口
-        models.setSetting(db, companion.STATE_KEY,
-                          '{"day": "2026-10-13", "dayCount": 0, "missed": 0, "nextAt": "2026-10-14T09:00:00"}')
+        stateJson = (
+                '{"day": "2026-10-13", "dayCount": 0, "missed": 0,'
+                ' "nextAt": "2026-10-14T09:00:00"}'
+            )
+        models.setSetting(db, companion.STATE_KEY, stateJson)
         _mood(db, "2026-10-12", ["低落"], 6)
         _mood(db, "2026-10-13", ["低落"], 7)
         models.upsertChatSession(db, "sess-1", "2026-10-13T10:00:00")

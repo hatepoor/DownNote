@@ -65,11 +65,16 @@ def getMoodByEntry(db: Session, entryId: int) -> Mood | None:
     return db.scalar(select(Mood).where(Mood.entry_id == entryId))
 
 
-def listRecentMoods(db: Session, limit: int = 20) -> list[tuple[str, Mood]]:
+def listRecentMoods(db: Session, limit: int = 20, kind: str | None = None) -> list[tuple[str, Mood]]:
+    """最近的心情记录（created_at, Mood）按时间倒序；kind 非空时只取该类型的条目。
+
+    kind 用于区分「当天条目」（entry）与「日整合日记」（daily）——日整合的心情是
+    同一天逐条心情的程序汇总，信号检测按天聚合时必须排除，否则同一天被平均两次。
+    """
+    query = select(Entry.created_at, Mood).join(Mood, Mood.entry_id == Entry.id)
+    if kind is not None:
+        query = query.where(Entry.kind == kind)
     rows = db.execute(
-            select(Entry.created_at, Mood)
-            .join(Mood, Mood.entry_id == Entry.id)
-            .order_by(Entry.created_at.desc(), Mood.id.desc())
-            .limit(limit)
+            query.order_by(Entry.created_at.desc(), Mood.id.desc()).limit(limit)
         ).all()
     return [(created_at, mood) for created_at, mood in rows]

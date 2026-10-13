@@ -26,7 +26,13 @@ def isReplyEnabled(db) -> bool:
     return models.getSetting(db, ENABLED_KEY) != "0"  # 缺省开启
 
 
-def _buildPrompt(content: str, labels: list[str], intensity: int, summary: str, persona: str) -> str:
+def _buildPrompt(
+        content: str,
+        labels: list[str],
+        intensity: int,
+        summary: str,
+        persona: str,
+    ) -> str:
     return (
             ENTRY_REPLY_PROMPT
             .replace("{persona}", persona or DEFAULT_REPLY_PERSONA)

@@ -91,12 +91,12 @@ def replyToRead(reply: models.EntryReply | None) -> ReplyRead | None:
         )
 
 
-def entryToRead(entry: models.Entry, db=None) -> EntryRead:
+def entryToRead(entry: models.Entry, reply: models.EntryReply | None = None) -> EntryRead:
     """ORM 条目 → 读模型（含心情记录与图片地址）；entry 需在会话内且 mood 可加载。
 
-    传 db 时一并装配条目回应（列表查询用）；不传则 reply 为 None（单条响应不查回应）。
+    reply 由调用方按需传入：列表与日页先用 getRepliesByEntries 批量取回再逐条装配，
+    避免逐条查询（N+1）；单条响应不传，reply 即为 None。
     """
-    reply = models.getReplyByEntry(db, entry.id) if db is not None else None
     return EntryRead(
             id=entry.id,
             content=entry.content,
@@ -172,7 +172,8 @@ def listEntries(limit: int = 50, offset: int = 0) -> list[EntryRead]:
         raise HTTPException(status_code=400, detail="offset 不能为负")
     with database.getDb() as db:
         entries = models.listEntriesWithMood(db, limit=limit, offset=offset)
-        return [entryToRead(entry, db) for entry in entries]
+        replyMap = models.getRepliesByEntries(db, [entry.id for entry in entries])
+        return [entryToRead(entry, replyMap.get(entry.id)) for entry in entries]
 
 
 async def entryEventStream():

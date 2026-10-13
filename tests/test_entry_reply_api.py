@@ -53,3 +53,14 @@ def test_chat_transfer_404(client):
     with database.getDb() as db:
         entryId = models.addEntry(db, "x", None, "2026-10-13T15:42:00")  # 无回应
     assert client.post(f"/api/entries/{entryId}/reply/chat").status_code == 404
+
+
+def test_list_and_day_detail_carry_reply(client):
+    """列表与某一天页面都要装配回应——日页曾漏传 db，导致历史日的回应卡片永不显示。"""
+    _seed()
+    listed = client.get("/api/entries").json()
+    assert listed[0]["reply"] is not None
+    assert listed[0]["reply"]["replyText"] == "撑不住就先靠一下。"
+    detail = client.get("/api/diaries/2026-10-13").json()
+    assert detail["entries"][0]["reply"] is not None
+    assert detail["entries"][0]["reply"]["replyText"] == "撑不住就先靠一下。"

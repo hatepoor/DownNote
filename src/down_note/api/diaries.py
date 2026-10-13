@@ -76,8 +76,9 @@ def getDiaryDay(day: str) -> DiaryDetailRead:
     with database.getDb() as db:
         digest = models.getDailyEntry(db, day)
         entries = models.listDayEntries(db, day)
+        replyMap = models.getRepliesByEntries(db, [entry.id for entry in entries])
         return DiaryDetailRead(
                 day=day,
                 digest=entryToRead(digest) if digest is not None else None,
-                entries=[entryToRead(entry) for entry in entries],
+                entries=[entryToRead(entry, replyMap.get(entry.id)) for entry in entries],
             )

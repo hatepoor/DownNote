@@ -34,6 +34,7 @@ from down_note.db.models.entry import (
 from down_note.db.models.entryReply import (
         EntryReply,
         createEntryReply,
+        getRepliesByEntries,
         getReplyByEntry,
         markReplyTransferred,
     )

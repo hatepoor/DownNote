@@ -16,12 +16,12 @@ def _schema(dbFile):
     return dbFile
 
 
-def _setup(monkeypatch, reply_text="抱抱，先喝口水。"):
+def _setup(monkeypatch, replyText="抱抱，先喝口水。"):
     captured = {}
 
     def fakeInvoke(cfg, messages, *, profile="chat"):
         captured["system"] = messages[0].content
-        return reply_text
+        return replyText
 
     monkeypatch.setattr(entryReply.llm, "invokeModel", fakeInvoke)
     with database.getDb() as db:

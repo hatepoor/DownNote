@@ -8,6 +8,7 @@
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, String, Text, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column, Session
 
 from down_note.db.models.base import Base
@@ -34,12 +35,25 @@ def createEntryReply(db: Session, entryId: int, text: str) -> EntryReply | None:
             created_at=datetime.now().isoformat(timespec="seconds"),
         )
     db.add(reply)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # 并发下另一任务已穿过上面的检查并抢先落库：让位（唯一约束是最后一道闸）
+        db.rollback()
+        return None
     return reply
 
 
 def getReplyByEntry(db: Session, entryId: int) -> EntryReply | None:
     return db.scalar(select(EntryReply).where(EntryReply.entry_id == entryId))
+
+
+def getRepliesByEntries(db: Session, entryIds: list[int]) -> dict[int, EntryReply]:
+    """一次取回多条条目的回应，键为 entryId（列表装配用，避免逐条查询）。"""
+    if not entryIds:
+        return {}
+    rows = db.scalars(select(EntryReply).where(EntryReply.entry_id.in_(entryIds))).all()
+    return {row.entry_id: row for row in rows}
 
 
 def markReplyTransferred(db: Session, replyId: int, sessionId: str, messageId: int) -> None:

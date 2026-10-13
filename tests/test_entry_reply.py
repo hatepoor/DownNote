@@ -37,5 +37,16 @@ def test_mark_transferred(db):
     assert got.session_id == "sess-1" and got.session_message_id == 42
 
 
+def test_concurrent_duplicate_returns_none(db, monkeypatch):
+    """并发下唯一约束兜底：后到者返回 None，而不是把 IntegrityError 抛出去。"""
+    entryId = _entry(db)
+    models.createEntryReply(db, entryId, "第一句")
+    db.commit()  # 让第一条先落库，随后的回滚不波及它
+    # 模拟两个任务同时穿过「先查」：让存在性检查看不见已落库的那条
+    monkeypatch.setattr(models.entryReply, "getReplyByEntry", lambda *a, **k: None)
+    assert models.createEntryReply(db, entryId, "第二句") is None
+    assert models.getReplyByEntry(db, entryId).reply_text == "第一句"
+
+
 def test_schema_version_bumped():
     assert database.SCHEMA_VERSION >= 8
