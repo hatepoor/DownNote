@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from down_note import config
 from down_note.agent import llm
-from down_note.core import crisis
+from down_note.core import crisis, entryReply
 from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker
 from down_note.core.prompts import ANALYZE_MOOD_PROMPT
 from down_note.db import database, models
@@ -150,4 +150,10 @@ def analyzeEntry(entryId: int) -> MoodResult | None:
         _publishAnalyzeState(entryId, models.ANALYZE_PENDING)
         return None
     _publishAnalyzeState(entryId, models.ANALYZE_DONE)
+    # 条目回应（v0.3.0 01）：分析成功的当天条目，异步留一两句；内部静默容错
+    if entry.kind == "entry":
+        try:
+            entryReply.generateEntryReply(entryId)
+        except Exception:
+            logger.exception("条目回应步骤异常（条目 %s）", entryId)
     return result
