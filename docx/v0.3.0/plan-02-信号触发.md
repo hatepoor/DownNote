@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - 代码 camelCase；运行 `uv run`；测试 `uv run pytest`（基线 123 passed + 01 新增，不得回归；含既有 `test_companion_engine.py` 11 例）。
-- 信号开口**完全同规则**：窗口 09:00–22:30、计入档位当日上限、让路、未回退避全部遵守；只是绕过「未到点」。
+- 信号开口**完全同规则**：窗口 09:00–22:30、计入档位当日上限、让路（含「刚启动」启动缓冲）、未回退避全部遵守；只豁免「未到点」（频率等待）。
 - 信号**无独立开关**，随主动陪伴（`companion_enabled`）生效；降级下开口按主动开口规则跳过、信号保持未处理。
 - 「低落标签」= `core/prompts/analyzeMood.py` 的 `LOW_LABELS`（低落族：低落/难过/失落/沮丧/空虚/麻木）。
 - 测试隔离：conftest `isolateDataDir` + `dbFile`；种子用无参 `getDb()`；不 monkeypatch `DEFAULT_DB_PATH`（不存在）。
@@ -25,7 +25,7 @@
 - `buildSignalContextText(hit) -> str`（`agent/context.py`，可选增强）
 - companion `patrol` 信号命中时提前开口；`_generateOpening(cfg, sessionId, instruction=CARE_INSTRUCTION)` 加第三参
 
-设计要点：信号检测挂在 `_skipReason` **之前**——命中时以 `ignoreTiming=True` 调 `_skipReason`（只绕过「启动缓冲」与「未到点」，窗口/上限/让路/退避照常），其余走原有频率逻辑。
+设计要点：信号检测挂在 `_skipReason` **之前**——命中时以「只忽略 `nextAt`」的方式调 `_skipReason`（启动缓冲、窗口、上限、让路、退避全部照常，含「刚启动」让路），其余走原有频率逻辑。**信号只豁免频率等待，不豁免启动缓冲**——刚启动就开口很突兀，这正是 v0.2.0 定启动缓冲的初衷；信号的价值在「不等频率」，不在「不等启动」。
 
 ---
 
@@ -110,15 +110,20 @@ def test_cooldown_suppresses_repeat(db_path):
 
 
 def test_cooldown_is_per_kind(db_path):
-    """低落开口的冷却不压制强度突变（两类信号独立冷却）。"""
+    """两类信号冷却互不相干：low 被冷却挡住的同时，spike 仍应放行。
+
+    数据集同时满足两类信号的触发条件：连续两天高强度低落（low 命中）
+    且最新日 9 比前 3 日均值 4.0 突升 5（spike 命中）。low 已冷却 → 放行 spike。
+    """
     with database.getDb() as db:
-        for d, i in (("2026-10-10", 3), ("2026-10-11", 3), ("2026-10-12", 4)):
-            _mood(db, d, ["平静"], i)
-        _mood(db, "2026-10-13", ["焦虑"], 9)
+        for d in ("2026-10-10", "2026-10-11"):
+            _mood(db, d, ["平静"], 3)
+        _mood(db, "2026-10-12", ["低落"], 6)  # 与 10-13 构成连续低落
+        _mood(db, "2026-10-13", ["低落"], 9)  # 强度高 → 对前 3 日均值(4.0)突升 5
         models.setSetting(db, signals.HANDLED_KEY_PREFIX + "low",
-                          "2026-10-13T21:00:00")  # 低落刚冷却，突变不受压制
+                          "2026-10-13T21:00:00")  # low 已冷却
         hit = signals.detectSignal(db, datetime(2026, 10, 13, 22, 0))
-    assert hit is not None and hit.kind == "spike"
+    assert hit is not None and hit.kind == "spike"  # low 被挡、spike 放行
 
 
 def test_low_streak_broken_resets(db_path):
@@ -233,7 +238,7 @@ def markHandled(db, kind: str, now: datetime) -> None:
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `uv run pytest tests/test_companion_signals.py -v`（Expected: 7 passed）
+Run: `uv run pytest tests/test_companion_signals.py -v`（Expected: 8 passed，检测器部分）
 
 ---
 
@@ -277,12 +282,28 @@ def buildSignalContextText(hit) -> str:
 def _generateOpening(cfg, sessionId: str, instruction: str = CARE_INSTRUCTION) -> str:
 ```
 
-`_patrolOnce` 在算 `reason = _skipReason(...)` 之前插入信号判定。文件 import 区加 `from down_note.core import signals`、`from down_note.agent.prompts import SIGNAL_CARE_INSTRUCTION`（`CARE_INSTRUCTION` 现有 import 行扩展）。改动点：
+`_patrolOnce` 在算 `reason = _skipReason(...)` 之前插入信号判定。文件 import 区加 `from down_note.core import signals`、`from down_note.agent.prompts import SIGNAL_CARE_INSTRUCTION`（`CARE_INSTRUCTION` 现有 import 行扩展）。
+
+**给 `_skipReason` 加「只忽略 nextAt」参数**（与现有 `ignoreTiming` 并存——`ignoreTiming` 是开发自测口子，连缓冲一起跳；信号要的是只跳频率等待、缓冲保留）：
+
+```python
+def _skipReason(state: dict, tier: str, now: datetime, ignoreTiming: bool, ignoreNextAt: bool = False) -> str | None:
+    if not ignoreTiming and now - _processStartedAt < timedelta(minutes=STARTUP_GRACE_MINUTES):
+        return "启动缓冲"  # 信号也让路：刚启动不开口
+    if not _insideWindow(now):
+        return "窗口外"
+    nextAt = _parseTs(state.get("nextAt"))
+    if not ignoreTiming and not ignoreNextAt and nextAt is not None and now < nextAt:
+        return "未到点"  # 信号唯一豁免的一条
+    ...
+```
+
+调用处：
 
 ```python
         hit = signals.detectSignal(db, current)  # 02：信号优先于频率
         if hit is not None:
-            reason = _skipReason(state, tier, current, ignoreTiming=True)  # 绕过「未到点」，窗口/上限/让路/退避照常
+            reason = _skipReason(state, tier, current, ignoreTiming, ignoreNextAt=True)  # 只豁免频率等待，启动缓冲/窗口/上限/让路/退避照常
         else:
             reason = _skipReason(state, tier, current, ignoreTiming)
 ```
@@ -332,9 +353,31 @@ def test_patrol_signal_opens_early(db_path, monkeypatch):
     assert result["opened"] is True  # 信号绕过「未到点」提前开口
     with database.getDb() as db:
         assert models.getSetting(db, signals.HANDLED_KEY_PREFIX + "low") is not None
+
+
+def test_patrol_signal_respects_startup_grace(db_path, monkeypatch):
+    """信号不豁免启动缓冲：刚启动（<10 分钟）即使信号命中也不开口。"""
+    from down_note.core import companion
+    with database.getDb() as db:
+        models.setSetting(db, companion.ENABLED_KEY, "1")
+        models.setSetting(db, companion.TIER_KEY, "cold")
+        models.setSetting(db, "base_url", "http://x/v1")
+        models.setSetting(db, "model_name", "m")
+        _mood(db, "2026-10-12", ["低落"], 6)
+        _mood(db, "2026-10-13", ["低落"], 7)
+    # 进程刚启动 2 分钟（缓冲 10 分钟内）
+    monkeypatch.setattr(companion, "_processStartedAt", datetime(2026, 10, 13, 20, 58))
+    monkeypatch.setattr(companion, "_generateOpening",
+                        lambda *a, **k: pytest.fail("启动缓冲内不应生成"))
+    result = companion.patrol(now=datetime(2026, 10, 13, 21, 0))
+    assert result["opened"] is False and result["reason"] == "启动缓冲"
 ```
 
-- [ ] **Step 5: 全量回归 + 提交**
+- [ ] **Step 5: 跑测试确认通过**
+
+Run: `uv run pytest tests/test_companion_signals.py -v`（Expected: 10 passed，检测器 8 + 巡检集成 2）
+
+- [ ] **Step 6: 全量回归 + 提交**
 
 Run: `uv run pytest -q`（含既有 `test_companion_engine.py` 11 例不回归）
 ```bash
@@ -349,4 +392,4 @@ git commit -m "功能：v0.3.0 02 信号触发（连续低落/强度突变提前
 - **覆盖**：检测器(2.1 判据/冷却/重置/按类型冷却) + 巡检集成(2.2 提前开口/礼貌规则复用/内容针对)，覆盖总纲 02 全部决策。
 - **占位**：无 TBD。
 - **类型一致**：`detectSignal(db, now)`/`markHandled(db, kind, now)`/`HANDLED_KEY_PREFIX`/`SignalHit.kind` 在 2.1 定义与 2.2 消费一致；`_generateOpening(cfg, sessionId, instruction)` 三参与既有调用（两参，用默认值）兼容。
-- **已修订**：`LOW_LABELS` 从 analyzeMood 引入（中性位置）；取数基准用传入 `now`；冷却按类型独立键；测试标签「开心」→「平静」；隔离用 conftest。
+- **已修订**：`LOW_LABELS` 从 analyzeMood 引入（中性位置）；取数基准用传入 `now`；冷却按类型独立键；测试标签「开心」→「平静」；隔离用 conftest；信号**只豁免「未到点」**（`_skipReason` 新增 `ignoreNextAt`），启动缓冲仍生效（与模块 02 表三「刚启动」让路一致），并有 `test_patrol_signal_respects_startup_grace` 锁定；`test_cooldown_is_per_kind` 数据集同时命中两类信号、真正证明冷却互不相干。
