@@ -4,7 +4,7 @@
   <p><strong>一本会陪你说话的日记 · 开源 · 本地运行 · 无账号</strong></p>
   <p>
     <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
-    <img src="https://img.shields.io/badge/version-0.1.2-orange" alt="v0.1.2">
+    <img src="https://img.shields.io/badge/version-0.2.0-orange" alt="v0.2.0">
     <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python 3.12">
     <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey" alt="Windows">
   </p>
@@ -24,8 +24,13 @@
 
 而是一个 agent——一个接纳你所有低落情绪的 agent。你的情绪，它都读得到；在你低落的时候，陪你说说话。
 
-## 功能一览（v0.1.2）
+## 功能一览（v0.2.0）
 
+- **主动陪伴**（新）：可选开启、默认关闭；开启后它像朋友一样在一天里自己找时机开口（冷淡 / 正常 / 关心三档控制频率），说的都是你日记与记忆里的事；你正在写日记或聊天时它会让路，你不回它也不会追
+- **人格模板**（新）：默认就是「朋友发微信」那套口吻；也可以在设置里写下自己的 `soul.md`（只存本机），改完下一条消息即生效
+- **设置**（新）：侧边栏三页——模型 / 陪伴 / 人格
+- **会话删除**（新）：历史会话里可删掉某一次对话（物理删除、不可恢复；长期记忆不受影响）
+- **托盘常驻与系统通知**（新）：关窗口收进托盘（不再退出），托盘菜单可打开/退出、可设开机自启；它主动开口时若窗口不在前台会弹系统通知
 - **记录**：文字 + 图片，随时写下此刻的心情
 - **心情记录**：每条日记后台自动分析，通常 1 秒内产出情绪标签、强度与一句摘要（专用生成参数，不先"想一大段"）；失败会显示「分析失败」，点「刷新」即可重试
 - **唤醒对话**：多智能体陪伴聊天，开口前它会先读你最近写下的日子；说话像朋友发微信，不端着
@@ -36,9 +41,9 @@
 
 ## 下载使用
 
-1. 从 [Releases](../../releases) 下载安装包（如 `DownNote_0.1.2_x64-setup.exe`），双击运行安装向导——选择安装位置、可选桌面快捷方式；不需要安装 Python 或 Node。从旧版本升级直接覆盖安装，日记与配置保留
+1. 从 [Releases](../../releases) 下载安装包（如 `DownNote_0.2.0_x64-setup.exe`），双击运行安装向导——选择安装位置、可选桌面快捷方式；不需要安装 Python 或 Node。从旧版本升级直接覆盖安装，日记与配置保留
 2. 安装完成自动启动，首次启动自动建库
-3. 点左侧栏「设置」配置模型，保存即生效
+3. 点左侧栏「设置」——**模型**页配置模型（保存即生效）；**陪伴**页可开主动陪伴并选档位；**人格**页可自定义它的说话风格
 
 几点说明：
 
@@ -48,7 +53,8 @@
   https://dashscope.aliyuncs.com/compatible-mode/v1
   http://127.0.0.1:11434/v1   （Ollama）
   ```
-- 未配置模型也能写日记（**降级模式**：记录永不失能）；配置后分析与对话自动恢复
+- **关窗口 = 收进托盘**（v0.2.0 起）：进程继续在后台跑，它才能主动陪你；要完全退出：托盘图标右键 →「退出」
+- 未配置模型也能写日记（**降级模式**：记录永不失能）；主动陪伴与分析会暂停，配置后自动恢复
 - 模型的温度、思考强度可在设置里调整（默认 1.1 / low），真实作用于每次调用
 - Windows 10 若窗口空白，安装一次 [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)（Win11 自带）
 - 未做代码签名，首次运行 SmartScreen 提示时选「更多信息 → 仍要运行」
@@ -73,12 +79,12 @@ git clone https://github.com/hatepoor/DownNote.git
 cd down_note
 uv sync                                  # 后端依赖
 cd frontend && npm install && cd ..      # 前端依赖
-uv run pytest                            # 跑测试（88 个）
+uv run pytest                            # 跑测试（123 个）
 uv run python -m down_note.main          # 启动桌面应用
 ```
 
 - 开发模式：`cd frontend && npm run dev`，应用窗口/浏览器会自动走 Vite 热更新
-- 打包发布：`uv run python scripts/build.py` → 前端构建 → 后端 sidecar（PyInstaller）→ Tauri NSIS 安装包，产物为 `dist/DownNote_0.1.2_x64-setup.exe`
+- 打包发布：`uv run python scripts/build.py` → 前端构建 → 后端 sidecar（PyInstaller）→ Tauri NSIS 安装包，产物为 `dist/DownNote_0.2.0_x64-setup.exe`
 
 ## 目录结构
 
