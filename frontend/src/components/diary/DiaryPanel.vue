@@ -4,6 +4,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import {
+  chatAboutReply,
   fetchDayDetail,
   fetchEntries,
   openEntryEvents,
@@ -11,6 +12,7 @@ import {
   type DiaryDayDetail,
   type EntryItem,
 } from '../../api'
+import { requestOpenSession, switchView } from '../../stores/appState'
 import { formatDayTitle, formatPanelDate, isToday } from '../../utils/time'
 import { useScrollFade } from '../../utils/scrollFade'
 import CrisisMark from './CrisisMark.vue'
@@ -140,6 +142,18 @@ function onEditDone(): void {
   refreshSoon()
 }
 
+// 「聊聊」：把条目回应原文转移进最近活跃会话，然后带着会话跳到工作台继续聊。
+// 已转移过的回应接口幂等返回同一会话；会话被删则后端重新落库到新会话。
+async function onReplyChat(entryId: number): Promise<void> {
+  try {
+    const result = await chatAboutReply(entryId)
+    if (result.sessionId) requestOpenSession(result.sessionId)
+    else switchView('workbench')
+  } catch {
+    /* 静默：按钮可重试 */
+  }
+}
+
 watch(
   () => props.day,
   (day) => {
@@ -186,6 +200,7 @@ onUnmounted(() => {
             @updated="refreshSoon"
             @retry="retryAnalysis(entry.id)"
             @edit="editingEntry = $event"
+            @chat="onReplyChat"
           />
         </div>
       </template>
@@ -223,6 +238,7 @@ onUnmounted(() => {
               :entry="entry"
               @open-lightbox="lightboxUrl = $event"
               @retry="retryAnalysis(entry.id)"
+              @chat="onReplyChat"
             />
           </div>
         </template>

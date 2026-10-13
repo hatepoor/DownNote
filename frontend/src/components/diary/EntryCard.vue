@@ -3,11 +3,12 @@
 import type { EntryItem } from '../../api'
 import { formatClock } from '../../utils/time'
 import CrisisMark from './CrisisMark.vue'
+import EntryReplyCard from './EntryReplyCard.vue'
 import MoodRecordCard from './MoodRecordCard.vue'
 
 defineProps<{ entry: EntryItem }>()
 
-const emit = defineEmits<{ openLightbox: [url: string]; retry: [] }>()
+const emit = defineEmits<{ openLightbox: [url: string]; retry: []; chat: [entryId: number] }>()
 </script>
 
 <template>
@@ -30,5 +31,6 @@ const emit = defineEmits<{ openLightbox: [url: string]; retry: [] }>()
       <button class="m-link" @click="emit('retry')">刷新</button>
     </p>
     <p v-else class="mood-pending">心情记录生成中…</p>
+    <EntryReplyCard v-if="entry.reply" :reply="entry.reply" @chat="emit('chat', entry.id)" />
   </article>
 </template>

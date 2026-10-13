@@ -1,6 +1,6 @@
 // 日记条目接口：创建（文字/图片）、拉取、编辑与重新分析；分析状态走 SSE 推送。
 import { api, apiBase, withImageBase } from './http'
-import type { AnalyzeState, EntryItem } from './types'
+import type { AnalyzeState, EntryItem, ReplyItem } from './types'
 
 export async function fetchEntries(limit = 50, offset = 0): Promise<EntryItem[]> {
   const res = await api(`/api/entries?limit=${limit}&offset=${offset}`)
@@ -47,4 +47,11 @@ export async function openEntryEvents(
   const source = new EventSource(`${await apiBase()}/api/entries/events`)
   source.onmessage = (e) => onEvent(JSON.parse(e.data))
   return source
+}
+
+// 「聊聊」：把条目回应原文追加进最近活跃会话（零模型调用）；重复点击只跳转不重复落库
+export async function chatAboutReply(entryId: number): Promise<ReplyItem> {
+  const res = await api(`/api/entries/${entryId}/reply/chat`, { method: 'POST' })
+  if (!res.ok) throw new Error('跳转失败')
+  return res.json()
 }

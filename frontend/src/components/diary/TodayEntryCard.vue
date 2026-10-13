@@ -7,11 +7,16 @@ import { ref, watch } from 'vue'
 import type { EntryItem } from '../../api'
 import { formatEntryTime } from '../../utils/time'
 import CrisisMark from './CrisisMark.vue'
+import EntryReplyCard from './EntryReplyCard.vue'
 import MoodRecordCard from './MoodRecordCard.vue'
 
 const props = defineProps<{ entry: EntryItem; fresh?: boolean }>()
 
-const emit = defineEmits<{ edit: [entry: EntryItem]; retry: [] }>()
+const emit = defineEmits<{
+  edit: [entry: EntryItem]
+  retry: []
+  chat: [entryId: number]
+}>()
 
 const expanded = ref(false)
 
@@ -60,6 +65,7 @@ function startEdit(): void {
       <button class="m-link" @click="emit('retry')">刷新</button>
     </p>
     <p v-else class="mood-pending">心情记录生成中…</p>
+    <EntryReplyCard v-if="entry.reply" :reply="entry.reply" @chat="emit('chat', entry.id)" />
   </article>
 </template>
 

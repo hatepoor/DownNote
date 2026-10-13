@@ -3,7 +3,14 @@
 
 export * from './types'
 export { apiHealth } from './http'
-export { fetchEntries, submitEntry, updateEntry, reanalyzeEntry, openEntryEvents } from './entries'
+export {
+  fetchEntries,
+  submitEntry,
+  updateEntry,
+  reanalyzeEntry,
+  openEntryEvents,
+  chatAboutReply,
+} from './entries'
 export {
   fetchModelSettings,
   saveModelSettings,
