@@ -14,16 +14,23 @@ def _client() -> TestClient:
 
 
 def test_companionDefaultsOff(dbFile):
-    """陪伴默认关闭、档位默认「正常」——关闭时行为与现状一致的前提。"""
+    """陪伴默认关闭、档位默认「正常」——关闭时行为与现状一致的前提。
+
+    日记回应（v0.3.0 01）是独立开关，默认开启：写日记是用户主动行为，回应属基础体验。
+    """
     body = _client().get("/api/settings/companion").json()
-    assert body == {"enabled": False, "tier": "normal"}
+    assert body == {"enabled": False, "tier": "normal", "diaryReplyEnabled": True}
 
 
 def test_companionRoundtripAndValidation(dbFile):
     client = _client()
     resp = client.put("/api/settings/companion", json={"enabled": True, "tier": "caring"})
     assert resp.status_code == 200
-    assert client.get("/api/settings/companion").json() == {"enabled": True, "tier": "caring"}
+    assert client.get("/api/settings/companion").json() == {
+        "enabled": True,
+        "tier": "caring",
+        "diaryReplyEnabled": True,
+    }
     bad = client.put("/api/settings/companion", json={"enabled": True, "tier": "hot"})
     assert bad.status_code == 400
 
