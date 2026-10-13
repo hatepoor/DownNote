@@ -228,7 +228,7 @@ git commit -m "功能：v0.3.0 01 数据层 entry_replies 表（一条目一回�
 
 **Interfaces:**
 - Consumes: Task 1 的 `createEntryReply`/`getReplyByEntry`；`analysis.MoodResult`；`llm.invokeModel`；`config.getModelServiceConfig`；`context.resolvePersonaText`；`database.getDb`；`broker`/`ENTRY_EVENTS_CHANNEL`
-- Produces: `ENTRY_REPLY_PROMPT`（含 `{persona}` `{labels}` `{intensity}` `{summary}` `{content}` 占位）、`LOW_LABELS`（低落族标签集合）、`generateEntryReply(entryId: int) -> None`；SSE 事件 `{"type":"reply","entryId":N}` 发布到 `ENTRY_EVENTS_CHANNEL`
+- Produces: `ENTRY_REPLY_PROMPT`（含 `{persona}` `{labels}` `{intensity}` `{summary}` `{content}` 占位）、`generateEntryReply(entryId: int) -> None`；SSE 事件 `{"type":"reply","entryId":N}` 发布到 `ENTRY_EVENTS_CHANNEL`。`LOW_LABELS`（低落族标签集合）定义在 `core/prompts/analyzeMood.py`（中性位置，signals.py 从那里 import，不反向依赖 entryReply）
 
 回应与心情分析是**两次独立模型调用**：analysis 档强制关思考、800 预算且 prompt 是 JSON 观察员口吻，不适合一两句共情留言——回应用 chat 档（跟随用户温度/思考设置），单独一次调用。
 
@@ -236,25 +236,19 @@ git commit -m "功能：v0.3.0 01 数据层 entry_replies 表（一条目一回�
 
 ```python
 # tests/test_entry_reply_generate.py
-"""条目回应生成链路（v0.3.0 01）：开关、降级、唯一、提示词装配。"""
-import json
+"""条目回应生成链路（v0.3.0 01）：开关、降级、唯一、提示词装配。
 
+隔离由 tests/conftest.py 的 autouse 夹具 isolateDataDir 保证（DOWN_NOTE_DATA_DIR 指向
+tmp_path）。种子用无参 getDb()；调 generateEntryReply 不传 dbPath（用默认库=隔离库）。
+人格测试通过写 tmp_path/soul.md 触发（config.getDataDir 已被夹具指向 tmp_path）。
+"""
 import pytest
 
-from down_note import config
 from down_note.core import entryReply
 from down_note.db import database, models
 
 
-@pytest.fixture()
-def db_path(tmp_path, monkeypatch):
-    path = tmp_path / "t.db"
-    database.ensureSchema(path)
-    monkeypatch.setattr(config, "getDataDir", lambda: tmp_path)
-    return path
-
-
-def _setup(db_path, monkeypatch, reply_text="抱抱，先喝口水。"):
+def _setup(monkeypatch, reply_text="抱抱，先喝口水。"):
     captured = {}
 
     def fakeInvoke(cfg, messages, *, profile="chat"):
@@ -262,7 +256,7 @@ def _setup(db_path, monkeypatch, reply_text="抱抱，先喝口水。"):
         return reply_text
 
     monkeypatch.setattr(entryReply.llm, "invokeModel", fakeInvoke)
-    with database.getDb(db_path) as db:
+    with database.getDb() as db:
         models.setSetting(db, "base_url", "http://x/v1")
         models.setSetting(db, "model_name", "m")
         entryId = models.addEntry(db, "今天面试砸了，胸口很闷。", None, "2026-10-13T15:42:00")
@@ -272,42 +266,42 @@ def _setup(db_path, monkeypatch, reply_text="抱抱，先喝口水。"):
     return entryId, captured
 
 
-def test_reply_generated_and_stored(db_path, monkeypatch):
-    entryId, captured = _setup(db_path, monkeypatch)
-    entryReply.generateEntryReply(entryId, dbPath=db_path)
-    with database.getDb(db_path) as db:
+def test_reply_generated_and_stored(monkeypatch):
+    entryId, captured = _setup(monkeypatch)
+    entryReply.generateEntryReply(entryId)
+    with database.getDb() as db:
         got = models.getReplyByEntry(db, entryId)
     assert got is not None and got.reply_text == "抱抱，先喝口水。"
     assert "低落" in captured["system"] and "面试砸了" in captured["system"]
 
 
-def test_disabled_switch_skips(db_path, monkeypatch):
-    entryId, _ = _setup(db_path, monkeypatch)
-    with database.getDb(db_path) as db:
+def test_disabled_switch_skips(monkeypatch):
+    entryId, _ = _setup(monkeypatch)
+    with database.getDb() as db:
         models.setSetting(db, "diary_reply_enabled", "0")
-    entryReply.generateEntryReply(entryId, dbPath=db_path)
-    with database.getDb(db_path) as db:
+    entryReply.generateEntryReply(entryId)
+    with database.getDb() as db:
         assert models.getReplyByEntry(db, entryId) is None
 
 
-def test_unconfigured_model_skips(db_path, monkeypatch):
-    with database.getDb(db_path) as db:  # 不配模型（无 base_url/model_name）
+def test_unconfigured_model_skips(monkeypatch):
+    with database.getDb() as db:  # 不配模型（无 base_url/model_name）
         entryId = models.addEntry(db, "x", None, "2026-10-13T15:42:00")
         models.upsertMood(db, entryId=entryId, labels=["平静"], intensity=3,
                           summary="普通", crisis=False, analyzedAt="x", model="m")
     monkeypatch.setattr(entryReply.llm, "invokeModel",
                         lambda *a, **k: pytest.fail("降级下不应调模型"))
-    entryReply.generateEntryReply(entryId, dbPath=db_path)
-    with database.getDb(db_path) as db:
+    entryReply.generateEntryReply(entryId)
+    with database.getDb() as db:
         assert models.getReplyByEntry(db, entryId) is None
 
 
-def test_persona_injected(db_path, monkeypatch):
-    entryId, captured = _setup(db_path, monkeypatch)
-    with database.getDb(db_path) as db:
+def test_persona_injected(monkeypatch, tmp_path):
+    entryId, captured = _setup(monkeypatch)
+    with database.getDb() as db:
         models.setSetting(db, "persona_enabled", "1")
-    (db_path.parent / "soul.md").write_text("说话像损友，爱怼人。", encoding="utf-8")
-    entryReply.generateEntryReply(entryId, dbPath=db_path)
+    (tmp_path / "soul.md").write_text("说话像损友，爱怼人。", encoding="utf-8")
+    entryReply.generateEntryReply(entryId)
     assert "损友" in captured["system"]
 ```
 
@@ -344,13 +338,22 @@ ENTRY_REPLY_PROMPT = """{persona}
 DEFAULT_REPLY_PERSONA = "你是一个真实、接地气的朋友，正在陪一个愿意写下心事的人。"
 ```
 
-- [ ] **Step 4: 导出**（`core/prompts/__init__.py` 追加）
+- [ ] **Step 4: 导出 + 中性位置定义低落标签**（两处）
+
+`core/prompts/__init__.py` 追加：
 
 ```python
 from down_note.core.prompts.entryReply import DEFAULT_REPLY_PERSONA, ENTRY_REPLY_PROMPT
 ```
 
-（先看该文件现有导出风格，保持一致的 import 列表追加。）
+`core/prompts/analyzeMood.py` 末尾追加（低落族标签是心情分析的属性，放中性位置供 signals.py 引用，避免 signals 反向依赖 entryReply）：
+
+```python
+# 低落族标签集合（v0.3.0 02 信号检测用）：与上文清单的低落族保持同步
+LOW_LABELS = {"低落", "难过", "失落", "沮丧", "空虚", "麻木"}
+```
+
+（先看 `__init__.py` 现有导出风格，保持一致的 import 列表追加。）
 
 - [ ] **Step 5: 实现生成器** `src/down_note/core/entryReply.py`
 
@@ -377,7 +380,6 @@ from down_note.db import database, models
 logger = logging.getLogger(__name__)
 
 ENABLED_KEY = "diary_reply_enabled"  # settings 键：日记回应开关（"1"/"0"，缺省=开启）
-LOW_LABELS = {"低落", "难过", "失落", "沮丧", "空虚", "麻木"}
 
 
 def isReplyEnabled(db) -> bool:
@@ -395,9 +397,9 @@ def _buildPrompt(content: str, labels: list[str], intensity: int, summary: str, 
         )
 
 
-def generateEntryReply(entryId: int, dbPath=None) -> None:
+def generateEntryReply(entryId: int) -> None:
     """为一条已分析的日记生成回应并落库 + SSE 推送；任何失败静默跳过。"""
-    with database.getDb(dbPath) as db:
+    with database.getDb() as db:
         if not isReplyEnabled(db):
             return
         if models.getReplyByEntry(db, entryId) is not None:
@@ -428,7 +430,7 @@ def generateEntryReply(entryId: int, dbPath=None) -> None:
     if not text:
         return
 
-    with database.getDb(dbPath) as db:
+    with database.getDb() as db:
         reply = models.createEntryReply(db, entryId, text)
         if reply is None:
             return  # 并发下已被另一条任务生成
@@ -475,13 +477,19 @@ git commit -m "功能：v0.3.0 01 条目回应生成链路（提示词 + 管线�
 - Consumes: Task 1 的 `getReplyByEntry`/`markReplyTransferred`；`models.addMessage`、`models.upsertChatSession`、`models.listRecentSessions`；`broker`
 - Produces: `ReplyRead`（pydantic，字段 `replyText/createdAt/sessionId/transferred`）、`POST /api/entries/{entryId}/reply/chat -> ReplyRead`（幂等）；`EntryRead.reply: ReplyRead | None`（前端 Task 5 消费）
 
-「聊聊」是零模型调用的纯转移：把回应原文作为 assistant 消息追加进最近活跃会话。只写 messages 表与会话活跃时间，与主动开口的落库方式一致（不直接动 graph state）。
+「聊聊」是零模型调用的纯转移：把回应原文作为 assistant 消息追加进最近活跃会话。只写 messages 表与会话活跃时间，与主动开口的落库方式一致（不直接动 graph state）。**幂等分支必须校验目标会话仍存在**（总纲：会话删除后回应保留、「聊聊」回到可点状态）——`session_message_id` 无指向会话的外键，会话被物理删除后该字段不会清空，不校验会把用户带到已消失的空会话。
 
 - [ ] **Step 1: 写失败测试**
 
 ```python
 # tests/test_entry_reply_api.py
-"""条目回应接口（v0.3.0 01）：聊聊转移幂等、404。"""
+"""条目回应接口（v0.3.0 01）：聊聊转移幂等、404。
+
+隔离由 tests/conftest.py 的 autouse 夹具 isolateDataDir 保证（DOWN_NOTE_DATA_DIR 指向
+tmp_path，getDb() 无参经 config.getDataDir() 落进临时库）；本文件不另设 monkeypatch——
+不存在 database.DEFAULT_DB_PATH 这个常量，写了也是静默空操作。种子与断言都用无参 getDb()，
+与 TestClient 里的 app 读同一个库。
+"""
 import pytest
 from fastapi.testclient import TestClient
 
@@ -490,39 +498,48 @@ from down_note.db import database, models
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
-    path = tmp_path / "t.db"
-    database.ensureSchema(path)
-    monkeypatch.setattr(database, "DEFAULT_DB_PATH", path, raising=False)
-    return TestClient(app), path
+def client(dbFile):  # dbFile 建好隔离库；app 与种子同库
+    return TestClient(app)
 
 
-def _seed(path):
-    with database.getDb(path) as db:
-        entryId = models.addEntry(db, "今天有点撑不住。", None, "2026-10-13T15:42:00")
-        models.createEntryReply(db, entryId, "撑不住就先靠一下。")
+def _seed(entry_text="今天有点撑不住。", reply_text="撑不住就先靠一下。") -> int:
+    with database.getDb() as db:
+        entryId = models.addEntry(db, entry_text, None, "2026-10-13T15:42:00")
+        models.createEntryReply(db, entryId, reply_text)
     return entryId
 
 
 def test_chat_transfer_idempotent(client):
-    c, path = client
-    entryId = _seed(path)
-    r1 = c.post(f"/api/entries/{entryId}/reply/chat")
+    entryId = _seed()
+    r1 = client.post(f"/api/entries/{entryId}/reply/chat")
     assert r1.status_code == 200
     first = r1.json()
     assert first["transferred"] is True and first["sessionId"]
-    r2 = c.post(f"/api/entries/{entryId}/reply/chat")
+    r2 = client.post(f"/api/entries/{entryId}/reply/chat")
     assert r2.json()["sessionId"] == first["sessionId"]  # 幂等：不重复落库
-    with database.getDb(path) as db:
+    with database.getDb() as db:
         msgs = models.listMessages(db, first["sessionId"])
     assert sum(1 for m in msgs if m.content == "撑不住就先靠一下。") == 1
 
 
+def test_chat_transfer_recovers_after_session_deleted(client):
+    """总纲决策：会话删除后回应保留、「聊聊」回到可点状态——再次点击应转移到新会话。"""
+    entryId = _seed()
+    first = client.post(f"/api/entries/{entryId}/reply/chat").json()
+    with database.getDb() as db:
+        models.deleteSessionMessages(db, first["sessionId"])
+        models.deleteChatSession(db, first["sessionId"])  # 物理删除目标会话
+    second = client.post(f"/api/entries/{entryId}/reply/chat").json()
+    assert second["transferred"] is True
+    assert second["sessionId"] != first["sessionId"]  # 落到新的最近活跃会话（此处为新建）
+    with database.getDb() as db:
+        assert db.get(models.ChatSession, second["sessionId"]) is not None
+
+
 def test_chat_transfer_404(client):
-    c, path = client
-    with database.getDb(path) as db:
+    with database.getDb() as db:
         entryId = models.addEntry(db, "x", None, "2026-10-13T15:42:00")  # 无回应
-    assert c.post(f"/api/entries/{entryId}/reply/chat").status_code == 404
+    assert client.post(f"/api/entries/{entryId}/reply/chat").status_code == 404
 ```
 
 - [ ] **Step 2: 跑测试确认失败**
@@ -580,13 +597,21 @@ def entryToRead(entry: models.Entry, db=None) -> EntryRead:
 ```python
 @router.post("/entries/{entryId}/reply/chat")
 def chatAboutReply(entryId: int) -> ReplyRead:
-    """「聊聊」：把回应原文零模型调用地追加进最近活跃会话；幂等。"""
+    """「聊聊」：把回应原文零模型调用地追加进最近活跃会话；幂等。
+
+    幂等分支校验目标会话仍存在——会话被物理删除后 session_message_id 不会清空，
+    不校验会把用户带到已消失的空会话；会话没了就当作未转移、重新落库。
+    """
     with database.getDb() as db:
         reply = models.getReplyByEntry(db, entryId)
         if reply is None:
             raise HTTPException(status_code=404, detail="该条目还没有回应")
-        if reply.session_message_id is not None:
-            return replyToRead(reply)  # 已转移：直接回现状，不重复落库
+        if (
+                reply.session_message_id is not None
+                and reply.session_id is not None
+                and db.get(models.ChatSession, reply.session_id) is not None
+            ):
+            return replyToRead(reply)  # 已转移且会话仍在：直接回现状，不重复落库
         sessions = models.listRecentSessions(db, limit=1)
         sessionId = sessions[0].session_id if sessions else uuid.uuid4().hex
         createdAt = _nowIso()
@@ -606,7 +631,7 @@ def chatAboutReply(entryId: int) -> ReplyRead:
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `uv run pytest tests/test_entry_reply_api.py -v`
-Expected: 2 passed
+Expected: 3 passed（含会话删除后恢复重转移）
 
 - [ ] **Step 5: 全量回归 + 提交**
 
@@ -633,19 +658,18 @@ git commit -m "功能：v0.3.0 01 回应读取与「聊聊」转移接口（幂�
 
 ```python
 # tests/test_settings_reply_toggle.py
-"""日记回应开关（v0.3.0 01）：默认开启、可关、读回。"""
+"""日记回应开关（v0.3.0 01）：默认开启、可关、读回。
+
+隔离由 conftest 的 isolateDataDir 保证；不 monkeypatch database.DEFAULT_DB_PATH（不存在）。
+"""
 import pytest
 from fastapi.testclient import TestClient
 
 from down_note.app import app
-from down_note.db import database
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
-    path = tmp_path / "t.db"
-    database.ensureSchema(path)
-    monkeypatch.setattr(database, "DEFAULT_DB_PATH", path, raising=False)
+def client(dbFile):  # dbFile 建好隔离库
     return TestClient(app)
 
 
@@ -706,7 +730,7 @@ git commit -m "功能：v0.3.0 01 日记回应开关（默认开启，存 settin
 - Modify: `frontend/src/api/entries.ts`（chatAboutReply）、`frontend/src/api/types.ts`（ReplyItem、EntryItem.reply）
 
 **Interfaces:**
-- Consumes: Task 3 的 `EntryRead.reply`、`POST /api/entries/{id}/reply/chat`；Task 4 的 `diaryReplyEnabled`；SSE 事件 `{type:'reply',entryId}`；appState 的 `openSessionChat`（置 pendingSessionId 并切工作台）/`switchView`
+- Consumes: Task 3 的 `EntryRead.reply`、`POST /api/entries/{id}/reply/chat`；Task 4 的 `diaryReplyEnabled`；SSE 事件 `{type:'reply',entryId}`；appState 的 `requestOpenSession`（置 pendingSessionId 并切工作台）/`switchView`
 - Produces: 无（终端 UI）
 
 - [ ] **Step 1: 类型与 API**
@@ -779,12 +803,12 @@ DiaryPanel 已订阅 `openEntryEvents`。事件回调加 reply 分支：命中�
 
 ```typescript
 import { chatAboutReply } from '../../api'
-import { openSessionChat, switchView } from '../../stores/appState'
+import { requestOpenSession, switchView } from '../../stores/appState'
 
 async function onReplyChat(entryId: number): Promise<void> {
   try {
     const result = await chatAboutReply(entryId)
-    if (result.sessionId) openSessionChat(result.sessionId)
+    if (result.sessionId) requestOpenSession(result.sessionId)  // 置 pendingSessionId + 切工作台
     else switchView('workbench')
   } catch { /* 静默，按钮可重试 */ }
 }
@@ -826,8 +850,8 @@ git commit -m "功能：v0.3.0 01 前端回应卡片 + 聊聊跳转 + 设置开�
 - Test: `tests/test_companion_signals.py`
 
 **Interfaces:**
-- Consumes: `models.listRecentMoods(db, limit)`（既有，返回 `[(created_at, Mood)]`）；`core/entryReply.LOW_LABELS`；companion 既有 `_skipReason`/`_openSession`/`_generateOpening`/`_scheduleNext`/状态键
-- Produces: `detectSignal(db, now) -> SignalHit | None`；`SignalHit`（dataclass，`kind: "low"|"spike"`、`detail: str`）；`SIGNAL_CARE_INSTRUCTION`；companion `patrol` 在信号命中时提前开口（外部行为不变，仍返回 `{opened, reason, sessionId}`）
+- Consumes: `models.listRecentMoods(db, limit)`（既有，返回 `[(created_at, Mood)]`）；`core/prompts/analyzeMood.LOW_LABELS`（中性位置）；companion 既有 `_skipReason`/`_openSession`/`_generateOpening`/`_scheduleNext`/状态键
+- Produces: `detectSignal(db, now) -> SignalHit | None`；`SignalHit`（dataclass，`kind: "low"|"spike"`、`detail: str`）；`HANDLED_KEY_PREFIX`（按信号类型记冷却）；`markHandled(db, kind, now)`；`SIGNAL_CARE_INSTRUCTION`；companion `patrol` 在信号命中时提前开口（外部行为不变，仍返回 `{opened, reason, sessionId}`）
 
 设计要点：信号检测挂在 `_skipReason` **之前**——信号命中时跳过「未到点」这一条等待（其余窗口/上限/让路/退避照常），其余情况走原有频率逻辑。
 
@@ -845,10 +869,8 @@ from down_note.db import database, models
 
 
 @pytest.fixture()
-def db_path(tmp_path):
-    path = tmp_path / "t.db"
-    database.ensureSchema(path)
-    return path
+def db_path(dbFile):  # conftest dbFile：隔离库已建表；种子用无参 getDb
+    return dbFile
 
 
 def _mood(db, day: str, labels, intensity: int, entry_id_offset: int = 0):
@@ -899,15 +921,27 @@ def test_cooldown_suppresses_repeat(db_path):
     with database.getDb(db_path) as db:
         _mood(db, "2026-10-12", ["低落"], 6)
         _mood(db, "2026-10-13", ["低落"], 7)
-        models.setSetting(db, signals.HANDLED_KEY,
-                          "2026-10-13T21:00:00")  # 1 小时前刚处理过
+        models.setSetting(db, signals.HANDLED_KEY_PREFIX + "low",
+                          "2026-10-13T21:00:00")  # 1 小时前刚处理过低落
         assert signals.detectSignal(db, datetime(2026, 10, 13, 22, 0)) is None
+
+
+def test_cooldown_is_per_kind(db_path):
+    """低落开口的冷却不压制强度突变（两类信号独立冷却）。"""
+    with database.getDb(db_path) as db:
+        for d, i in (("2026-10-10", 3), ("2026-10-11", 3), ("2026-10-12", 4)):
+            _mood(db, d, ["平静"], i)
+        _mood(db, "2026-10-13", ["焦虑"], 9)
+        models.setSetting(db, signals.HANDLED_KEY_PREFIX + "low",
+                          "2026-10-13T21:00:00")  # 低落刚冷却，突变不受压制
+        hit = signals.detectSignal(db, datetime(2026, 10, 13, 22, 0))
+    assert hit is not None and hit.kind == "spike"
 
 
 def test_low_streak_broken_resets(db_path):
     with database.getDb(db_path) as db:
         _mood(db, "2026-10-12", ["低落"], 6)
-        _mood(db, "2026-10-13", ["开心"], 2)  # 中断
+        _mood(db, "2026-10-13", ["平静"], 2)  # 中断（用枚举内标签）
         _mood(db, "2026-10-14", ["低落"], 7)  # 需重新累计
         assert signals.detectSignal(db, datetime(2026, 10, 14, 21, 0)) is None
 ```
@@ -933,10 +967,10 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from down_note.core.entryReply import LOW_LABELS
+from down_note.core.prompts.analyzeMood import LOW_LABELS
 from down_note.db import models
 
-HANDLED_KEY = "signal_last_handled_at"  # settings 键：最近一次信号开口时刻
+HANDLED_KEY_PREFIX = "signal_handled_at:"  # settings 键前缀：按信号类型分别记冷却（low / spike）
 COOLDOWN_HOURS = 48
 LOW_MIN_INTENSITY = 5
 SPIKE_DELTA = 4
@@ -949,9 +983,9 @@ class SignalHit:
     detail: str  # 给开口上下文的自然语言描述
 
 
-def _dailyMood(db, days: int) -> dict[str, list[tuple[list[str], int]]]:
-    """最近 days 天按日聚合的心情记录：{YYYY-MM-DD: [(labels, intensity), ...]}。"""
-    since = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+def _dailyMood(db, now: datetime, days: int) -> dict[str, list[tuple[list[str], int]]]:
+    """以 now 为基准取最近 days 天按日聚合的心情记录：{YYYY-MM-DD: [(labels, intensity), ...]}。"""
+    since = (now - timedelta(days=days)).isoformat(timespec="seconds")
     result: dict[str, list] = {}
     for createdAt, mood in models.listRecentMoods(db, limit=200):
         if createdAt < since:
@@ -970,8 +1004,8 @@ def _dayIsLow(entries: list[tuple[list[str], int]]) -> bool:
     return hasLow and _avg([i for _, i in entries]) >= LOW_MIN_INTENSITY
 
 
-def _inCooldown(db, now: datetime) -> bool:
-    raw = models.getSetting(db, HANDLED_KEY)
+def _inCooldown(db, kind: str, now: datetime) -> bool:
+    raw = models.getSetting(db, HANDLED_KEY_PREFIX + kind)
     if not raw:
         return False
     try:
@@ -981,16 +1015,19 @@ def _inCooldown(db, now: datetime) -> bool:
 
 
 def detectSignal(db, now: datetime) -> SignalHit | None:
-    """检出未处理信号则返回 SignalHit；冷却期内或无信号返回 None。"""
-    if _inCooldown(db, now):
-        return None
-    daily = _dailyMood(db, WINDOW_DAYS)
+    """检出未处理信号则返回 SignalHit；冷却期内或无信号返回 None。
+
+    两类信号各自独立冷却（「同一波低落不反复触发」——低落开口不压制突变）。
+    判据从宽：「前 3 日」取最近 3 个有记录的日子，不强求连续自然日（有意从宽，见模块 02）。
+    """
+    daily = _dailyMood(db, now, WINDOW_DAYS)
     days = sorted(daily.keys(), reverse=True)  # 新→旧
 
     # 连续低落：最近两个「有记录」的自然日都满足低落门槛
     today, yesterday = days[0], days[1] if len(days) > 1 else None
     if (
-            today and yesterday
+            not _inCooldown(db, "low", now)
+            and today and yesterday
             and (datetime.fromisoformat(today) - datetime.fromisoformat(yesterday)).days == 1
             and _dayIsLow(daily[today]) and _dayIsLow(daily[yesterday])
         ):
@@ -998,7 +1035,7 @@ def detectSignal(db, now: datetime) -> SignalHit | None:
         return SignalHit("low", f"用户已连续两天低落（日均强度 {avg:.1f}）")
 
     # 强度突变：最新一天比前 3 天均值突升
-    if len(days) >= 2:
+    if not _inCooldown(db, "spike", now) and len(days) >= 2:
         prevDays = days[1:4]
         prev = [i for d in prevDays for _, i in daily[d]]
         latest = [i for _, i in daily[days[0]]]
@@ -1007,8 +1044,8 @@ def detectSignal(db, now: datetime) -> SignalHit | None:
     return None
 
 
-def markHandled(db, now: datetime) -> None:
-    models.setSetting(db, HANDLED_KEY, now.isoformat(timespec="seconds"))
+def markHandled(db, kind: str, now: datetime) -> None:
+    models.setSetting(db, HANDLED_KEY_PREFIX + kind, now.isoformat(timespec="seconds"))
 ```
 
 - [ ] **Step 4: 跑测试确认通过**
@@ -1086,7 +1123,9 @@ def _patrolOnce(current, ignoreTiming=False):
         _saveState(db, state)
 
     sessionId = _openSession(current)
-    instruction = SIGNAL_CARE_INSTRUCTION if hit is not None else CARE_INSTRUCTION
+    instruction = (
+            SIGNAL_CARE_INSTRUCTION + f"（{hit.detail}）" if hit is not None else CARE_INSTRUCTION
+        )  # 信号开口把信号描述拼进指令（不动 refreshSystemPrompt 快照机制，风险最小）
     try:
         text = _generateOpening(cfg, sessionId, instruction)
     except (llm.ModelConfigError, llm.ModelUnavailableError):
@@ -1104,7 +1143,7 @@ def _patrolOnce(current, ignoreTiming=False):
         models.addMessage(db, sessionId, "assistant", text, createdAt)
         models.upsertChatSession(db, sessionId, createdAt)
         if hit is not None:
-            signals.markHandled(db, current)  # 开口成功才算处理（跳过不算）
+            signals.markHandled(db, hit.kind, current)  # 开口成功才算处理（跳过不算），按信号类型记冷却
         state = _loadState(db)
         state["lastOpenAt"] = current.isoformat(timespec="seconds")
         state["dayCount"] = state.get("dayCount", 0) + 1
@@ -1121,7 +1160,7 @@ def _patrolOnce(current, ignoreTiming=False):
     return {"opened": True, "reason": None, "sessionId": sessionId}
 ```
 
-说明：信号上下文（`buildSignalContextText`）通过 `refreshSystemPrompt` 的数据段注入——最简实现是让信号开口时把 `hit.detail` 拼进 `instruction`，而非改装配链路；本计划采用「instruction 内嵌信号描述」，把 `SIGNAL_CARE_INSTRUCTION` 在 `_patrolOnce` 里改为 `SIGNAL_CARE_INSTRUCTION + f"（{hit.detail}）"`。这样不动 `refreshSystemPrompt` 的快照机制，风险最小。
+说明：信号上下文通过指令内嵌信号描述注入（`SIGNAL_CARE_INSTRUCTION + f"（{hit.detail}）"`），不动 `refreshSystemPrompt` 的快照机制，风险最小。Step 5 的 `buildSignalContextText` 为可选增强——若后续要把近几天心情轨迹也注入数据段再启用，本版先用指令内嵌即可。
 
 - [ ] **Step 7: 巡检集成测试**（追加到 `tests/test_companion_signals.py`：信号命中提前开口、冷却期内走回频率逻辑、窗口外信号不开口）
 
@@ -1147,7 +1186,7 @@ def test_patrol_signal_opens_early(db_path, monkeypatch):
     result = companion.patrol(now=datetime(2026, 10, 13, 21, 0))
     assert result["opened"] is True  # 信号绕过「未到点」提前开口
     with database.getDb(db_path) as db:
-        assert models.getSetting(db, signals.HANDLED_KEY) is not None
+        assert models.getSetting(db, signals.HANDLED_KEY_PREFIX + "low") is not None
 ```
 
 - [ ] **Step 8: 全量回归 + 提交**
@@ -1195,8 +1234,10 @@ git commit -m "发布：v0.3.0 版本号同步 + 功能一览更新"
 
 ## Self-Review
 
-**Spec coverage：** 00 术语 → Task 0；01 日记回应（数据层 Task 1、生成 Task 2、API Task 3、开关 Task 4、前端 Task 5）；02 信号触发 → Task 6；03 打包 → Task 7；04 记忆修复已完成（不在本计划）。总纲关键决策逐条可指：回应落点（Task 1/5）、回应条件（Task 2 prompt 分档）、聊聊转移（Task 3 幂等）、信号判据与冷却（Task 6 signals.py）、完全同礼貌规则（Task 6 巡检集成 `_skipReason` 复用）、降级静默跳过（Task 2）、会话删除不动回应（Task 1 表无外键级联到会话）。
+**Spec coverage：** 00 术语 → Task 0；01 日记回应（数据层 Task 1、生成 Task 2、API Task 3、开关 Task 4、前端 Task 5）；02 信号触发 → Task 6；03 打包 → Task 7；04 记忆修复已完成（不在本计划）。总纲关键决策逐条可指：回应落点（Task 1/5）、回应条件（Task 2 prompt 分档）、聊聊转移（Task 3 幂等 + 会话删除后恢复重转移）、信号判据与冷却（Task 6 signals.py，两类信号独立冷却）、完全同礼貌规则（Task 6 巡检集成 `_skipReason` 复用）、降级静默跳过（Task 2）、会话删除不动回应且聊聊可恢复（Task 1 表无外键级联 + Task 3 幂等分支校验会话存在）。
 
-**Placeholder scan：** 无 TBD/TODO；Task 5 Step 4 的「现有刷新函数」与「openSessionChat」需实施者对照 DiaryPanel/appState 实际函数名（已知存在，名称以代码为准）——这是有意保留的对照点，非占位。
+**Placeholder scan：** 无 TBD/TODO；Task 5 Step 4 的「刷新函数」需实施者对照 DiaryPanel 实际的条目刷新函数名（已知存在，名称以代码为准）——这是有意保留的对照点，非占位。导航函数名已定为 `requestOpenSession`（appState.ts:71 真实导出）。
 
-**Type consistency：** `createEntryReply/getReplyByEntry/markReplyTransferred`（Task 1 定义 → Task 2/3 消费）一致；`detectSignal -> SignalHit`、`markHandled`、`HANDLED_KEY`（Task 6 内部）一致；`diaryReplyEnabled`（Task 4 后端 → Task 5 前端）一致；`ReplyRead`/`ReplyItem` 字段 `replyText/createdAt/sessionId/transferred` 前后端一致。
+**Type consistency：** `createEntryReply/getReplyByEntry/markReplyTransferred`（Task 1 定义 → Task 2/3 消费）一致；`detectSignal -> SignalHit`、`markHandled(db, kind, now)`、`HANDLED_KEY_PREFIX`（Task 6 内部一致，两类信号独立冷却）；`diaryReplyEnabled`（Task 4 后端 → Task 5 前端）一致；`ReplyRead`/`ReplyItem` 字段 `replyText/createdAt/sessionId/transferred` 前后端一致；`LOW_LABELS` 定义于 `core/prompts/analyzeMood.py`（中性位置），signals.py 从该处 import。
+
+**评审修订（2026-10-13，对照真实代码）**：① 删除两处 `monkeypatch.setattr(database, "DEFAULT_DB_PATH", ...)`（该常量不存在，隔离由 conftest `isolateDataDir` + `DOWN_NOTE_DATA_DIR` 保证；种子与断言改用无参 `getDb()`）；② 前端导航函数 `openSessionChat` → `requestOpenSession`（appState.ts:71）；③ 「聊聊」幂等分支补会话存在性校验（会话删除后恢复重转移，对齐总纲决策）；④ 信号冷却改按类型独立键（`signal_handled_at:low/spike`），避免低落开口压制突变；⑤ `detectSignal` 取数基准从 `datetime.now()` 改为传入的 `now`（否则跨日测试漂移）；⑥ `LOW_LABELS` 从 entryReply 挪到 analyzeMood（中性位置）；⑦ 测试样本标签「开心」→「平静」（枚举内）。
