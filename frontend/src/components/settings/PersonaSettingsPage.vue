@@ -15,6 +15,7 @@ const loading = ref(false)
 const hint = ref('')
 const errorMessage = ref('')
 const showDefault = ref(false)
+const savedContent = ref('') // 最近一次成功落盘的正文（关闭开关时用它，见 onToggle）
 
 const usedLength = computed(() => content.value.trim().length)
 const overLimit = computed(() => usedLength.value > maxLength.value)
@@ -25,6 +26,7 @@ onMounted(async () => {
     const settings = await fetchPersonaSettings()
     enabled.value = settings.enabled
     content.value = settings.content
+    savedContent.value = settings.content
     defaultPersona.value = settings.defaultPersona
     maxLength.value = settings.maxLength
   } catch {
@@ -45,8 +47,29 @@ async function save(): Promise<void> {
   try {
     await savePersonaSettings(enabled.value, content.value)
     content.value = content.value.trim()
+    savedContent.value = content.value
     hint.value = '已保存'
   } catch (e) {
+    errorMessage.value = e instanceof Error ? e.message : '保存失败，再试一次'
+  } finally {
+    saving.value = false
+  }
+}
+
+// 开关即改即存，两个方向都落盘：开关必须始终等于存档状态。
+// 关闭方向尤其致命——编辑区随 enabled 收起，「保存」按钮会一起消失，不即时存就成了
+// 「点了关闭其实没关、下次进来又是开」的死结（2026-10-13 用户报的 bug）。
+// 落盘时送「已落盘的正文」而非编辑框里的内容：未保存的越界文本不该挡住开关。
+async function onToggle(value: boolean): Promise<void> {
+  enabled.value = value
+  saving.value = true
+  hint.value = ''
+  errorMessage.value = ''
+  try {
+    await savePersonaSettings(value, savedContent.value)
+    hint.value = value ? '已开启，写上你想让它怎么说话' : '已关闭，现在用它自带的样子'
+  } catch (e) {
+    enabled.value = !value // 落盘失败则回滚开关，避免界面与存档不一致
     errorMessage.value = e instanceof Error ? e.message : '保存失败，再试一次'
   } finally {
     saving.value = false
@@ -62,7 +85,7 @@ async function save(): Promise<void> {
         写一段话，定义它说话的样子；留空就用它自带的样子。改完保存，之后的消息就按你写的来。
       </p>
     </div>
-    <ToggleSwitch v-model="enabled" label="自定义人格" />
+    <ToggleSwitch :model-value="enabled" label="自定义人格" @update:model-value="onToggle" />
   </div>
   <template v-if="enabled">
     <div class="field">
