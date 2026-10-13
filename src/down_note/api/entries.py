@@ -36,6 +36,13 @@ class MoodRead(BaseModel):
     model: str
 
 
+class ReplyRead(BaseModel):
+    replyText: str
+    createdAt: str
+    sessionId: str | None
+    transferred: bool
+
+
 class EntryRead(BaseModel):
     id: int
     content: str
@@ -45,6 +52,7 @@ class EntryRead(BaseModel):
     analyzeState: str  # pending | running | failed | done
     kind: str = "entry"  # entry=当天条目 | daily=日整合日记
     mood: MoodRead | None
+    reply: ReplyRead | None = None  # 条目回应（v0.3.0 01）；列表查询时装配
 
 
 class EntryUpdateWrite(BaseModel):
@@ -72,8 +80,23 @@ def moodToRead(mood: models.Mood | None) -> MoodRead | None:
         )
 
 
-def entryToRead(entry: models.Entry) -> EntryRead:
-    """ORM 条目 → 读模型（含心情记录与图片地址）；entry 需在会话内且 mood 可加载。"""
+def replyToRead(reply: models.EntryReply | None) -> ReplyRead | None:
+    if reply is None:
+        return None
+    return ReplyRead(
+            replyText=reply.reply_text,
+            createdAt=reply.created_at,
+            sessionId=reply.session_id,
+            transferred=reply.session_message_id is not None,
+        )
+
+
+def entryToRead(entry: models.Entry, db=None) -> EntryRead:
+    """ORM 条目 → 读模型（含心情记录与图片地址）；entry 需在会话内且 mood 可加载。
+
+    传 db 时一并装配条目回应（列表查询用）；不传则 reply 为 None（单条响应不查回应）。
+    """
+    reply = models.getReplyByEntry(db, entry.id) if db is not None else None
     return EntryRead(
             id=entry.id,
             content=entry.content,
@@ -83,6 +106,7 @@ def entryToRead(entry: models.Entry) -> EntryRead:
             analyzeState=entry.analyze_state,
             kind=entry.kind,
             mood=moodToRead(entry.mood),
+            reply=replyToRead(reply),
         )
 
 
@@ -148,7 +172,7 @@ def listEntries(limit: int = 50, offset: int = 0) -> list[EntryRead]:
         raise HTTPException(status_code=400, detail="offset 不能为负")
     with database.getDb() as db:
         entries = models.listEntriesWithMood(db, limit=limit, offset=offset)
-        return [entryToRead(entry) for entry in entries]
+        return [entryToRead(entry, db) for entry in entries]
 
 
 async def entryEventStream():
@@ -222,6 +246,37 @@ def getEntryMood(entryId: int) -> MoodRead:
     if mood is None:
         raise HTTPException(status_code=404, detail="该条目还没有心情记录")
     return moodToRead(mood)
+
+
+@router.post("/entries/{entryId}/reply/chat")
+def chatAboutReply(entryId: int) -> ReplyRead:
+    """「聊聊」：把回应原文零模型调用地追加进最近活跃会话；幂等。
+
+    幂等分支校验目标会话仍存在——会话被物理删除后 session_message_id 不会清空，
+    不校验会把用户带到已消失的空会话；会话没了就当作未转移、重新落库。
+    """
+    with database.getDb() as db:
+        reply = models.getReplyByEntry(db, entryId)
+        if reply is None:
+            raise HTTPException(status_code=404, detail="该条目还没有回应")
+        if (
+                reply.session_message_id is not None
+                and reply.session_id is not None
+                and db.get(models.ChatSession, reply.session_id) is not None
+            ):
+            return replyToRead(reply)  # 已转移且会话仍在：直接回现状，不重复落库
+        sessions = models.listRecentSessions(db, limit=1)
+        sessionId = sessions[0].session_id if sessions else uuid.uuid4().hex
+        createdAt = _nowIso()
+        if not sessions:
+            models.upsertChatSession(db, sessionId, createdAt)
+        messageId = models.addMessage(db, sessionId, "assistant", reply.reply_text, createdAt)
+        models.upsertChatSession(db, sessionId, createdAt)  # 刷新最近活跃
+        models.markReplyTransferred(db, reply.id, sessionId, messageId)
+        result = replyToRead(models.getReplyByEntry(db, entryId))
+    broker.publish(sessionId, {"type": "message", "message": {
+            "role": "assistant", "content": reply.reply_text, "createdAt": createdAt}})
+    return result
 
 
 @router.get("/images/{name}")
