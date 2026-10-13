@@ -13,6 +13,7 @@ from down_note.agent.prompts.companion import (
         DEFAULT_PERSONA,
         PERSONA_ROLE,
         PERSONA_STYLE,
+        SIGNAL_CARE_INSTRUCTION,
         WAKE_INSTRUCTION,
     )
 from down_note.agent.prompts.diaryMemory import DIARY_MEMORY_PROMPT

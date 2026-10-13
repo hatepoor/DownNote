@@ -19,8 +19,9 @@ from down_note import config
 from down_note.agent import llm, mainAgent
 from down_note.agent.checkpointer import getCheckpointer
 from down_note.agent.context import nowIso, refreshSystemPrompt
-from down_note.agent.prompts import CARE_INSTRUCTION
+from down_note.agent.prompts import CARE_INSTRUCTION, SIGNAL_CARE_INSTRUCTION
 from down_note.agent.tools import getCurrentTime
+from down_note.core import signals
 from down_note.core.events import broker, notifyProactiveMessage, turnLock
 from down_note.db import database, models
 
@@ -120,17 +121,25 @@ def _insideWindow(now: datetime) -> bool:
     return WINDOW_START <= now.time() <= WINDOW_END
 
 
-def _skipReason(state: dict, tier: str, now: datetime, ignoreTiming: bool) -> str | None:
+def _skipReason(
+        state: dict,
+        tier: str,
+        now: datetime,
+        ignoreTiming: bool,
+        ignoreNextAt: bool = False,
+    ) -> str | None:
     """表一 / 表二 / 表四判定：返回 None 表示可以开口，否则返回跳过原因（便于日志与测试）。
 
     ignoreTiming（开发自测口子）：跳过"启动缓冲"与"未到点"两条等待，其余照常。
+    ignoreNextAt（02-信号触发）：只豁免"未到点"（频率等待）——启动缓冲、窗口、上限、
+    让路、退避全部照常；刚启动就开口很突兀，信号的价值在"不等频率"而非"不等启动"。
     """
     if not ignoreTiming and now - _processStartedAt < timedelta(minutes=STARTUP_GRACE_MINUTES):
         return "启动缓冲"
     if not _insideWindow(now):
         return "窗口外"
     nextAt = _parseTs(state.get("nextAt"))
-    if not ignoreTiming and nextAt is not None and now < nextAt:
+    if not ignoreTiming and not ignoreNextAt and nextAt is not None and now < nextAt:
         return "未到点"
     lastOpenAt = _parseTs(state.get("lastOpenAt"))
     if lastOpenAt is not None and now - lastOpenAt < timedelta(minutes=MIN_GAP_MINUTES):
@@ -157,17 +166,18 @@ def _openSession(now: datetime) -> str:
     return sessionId
 
 
-def _generateOpening(cfg, sessionId: str) -> str:
+def _generateOpening(cfg, sessionId: str, instruction: str = CARE_INSTRUCTION) -> str:
     """一次生成任务：复用主智能体链路（同人格、同工具边界），返回回复文本。
 
     "一次"指不为"是否开口"额外问模型；实际可能包含工具调用与空回复兜底的多次模型请求。
+    instruction 默认普通主动开口；信号开口传带信号描述的 SIGNAL_CARE_INSTRUCTION（02）。
     """
     graph = mainAgent.buildMainAgent(cfg, getCheckpointer(), sessionId)
     refreshSystemPrompt(graph, sessionId, getCurrentTime.invoke({}))
     replyText = ""
     with turnLock(sessionId):
         for chunk, meta in graph.stream(
-                {"messages": [HumanMessage(content=CARE_INSTRUCTION)]},
+                {"messages": [HumanMessage(content=instruction)]},
                 {"configurable": {"thread_id": sessionId}},
                 stream_mode="messages",
             ):
@@ -208,7 +218,12 @@ def _patrolOnce(current: datetime, ignoreTiming: bool = False) -> dict:
                 db, lastOpenAt.isoformat(timespec="seconds")
             ):
             state["missed"] = 0  # 表四：主动开口之后用户回过话 → 未回计数清零
-        reason = _skipReason(state, tier, current, ignoreTiming)
+        hit = signals.detectSignal(db, current)  # 02：信号优先于频率
+        if hit is not None:
+            # 只豁免「未到点」：启动缓冲 / 窗口 / 上限 / 让路 / 退避全部照常
+            reason = _skipReason(state, tier, current, ignoreTiming, ignoreNextAt=True)
+        else:
+            reason = _skipReason(state, tier, current, ignoreTiming)
         if reason is not None:
             _saveState(db, state)
             logger.debug("主动陪伴跳过：%s", reason)
@@ -221,8 +236,12 @@ def _patrolOnce(current: datetime, ignoreTiming: bool = False) -> dict:
         _saveState(db, state)
 
     sessionId = _openSession(current)
+    # 信号开口把「信号描述」内嵌进指令（近几天心情轨迹已由常规上下文装配带入）
+    instruction = (
+            SIGNAL_CARE_INSTRUCTION + f"（{hit.detail}）" if hit is not None else CARE_INSTRUCTION
+        )
     try:
-        text = _generateOpening(cfg, sessionId)
+        text = _generateOpening(cfg, sessionId, instruction)
     except (llm.ModelConfigError, llm.ModelUnavailableError):
         logger.info("主动陪伴跳过：模型不可用")
         return {"opened": False, "reason": "模型不可用", "sessionId": sessionId}
@@ -240,6 +259,8 @@ def _patrolOnce(current: datetime, ignoreTiming: bool = False) -> dict:
             return {"opened": False, "reason": "目标会话已被删除", "sessionId": sessionId}  # 表三：不改投、不新建
         models.addMessage(db, sessionId, "assistant", text, createdAt)
         models.upsertChatSession(db, sessionId, createdAt)
+        if hit is not None:
+            signals.markHandled(db, hit.kind, current)  # 开口成功才算处理（跳过不算），按类型记冷却
         state = _loadState(db)
         state["lastOpenAt"] = current.isoformat(timespec="seconds")
         state["dayCount"] = state.get("dayCount", 0) + 1
@@ -255,5 +276,5 @@ def _patrolOnce(current: datetime, ignoreTiming: bool = False) -> dict:
     if _insideWindow(current):
         body = text if len(text) <= NOTIFY_BODY_MAX else text[:NOTIFY_BODY_MAX] + "…"
         notifyProactiveMessage(sessionId, NOTIFY_TITLE, body)
-    logger.info("主动陪伴已开口：%s（%s 字）", sessionId, len(text))
+    logger.info("主动陪伴已开口%s：%s（%s 字）", "（信号）" if hit is not None else "", sessionId, len(text))
     return {"opened": True, "reason": None, "sessionId": sessionId}

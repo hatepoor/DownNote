@@ -292,7 +292,7 @@ def test_sessionDeletedDuringGenerationIsDiscarded(dataDir, dbFile, monkeypatch)
         models.upsertChatSession(db, "s-doomed", _at(11, 0).isoformat(timespec="seconds"))
     _ready(monkeypatch)
 
-    def fakeGenerate(cfg, sessionId):
+    def fakeGenerate(cfg, sessionId, instruction=""):
         with database.getDb() as db:
             models.deleteChatSession(db, sessionId)
             models.deleteSessionMessages(db, sessionId)
