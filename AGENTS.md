@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-- 设计已收口，版本文档体系「一版一夹」已建立；`src/`、`frontend/`、`tests/` 按各模块文档的 todolist 逐个推进（v0.1.0～v0.2.0 均已完成并发布；v0.1.2 补充修复 12 待实机复验；v0.2.0 主动陪伴已发布，06 覆盖安装与干净机器验证待回填；v0.3.0 陪伴感深化 00/01/02 已完成并通过用户实机验收，仅剩 03 打包发布）。技术形态已定：Vue（Vite）前端 + Python（FastAPI + APScheduler + SQLAlchemy + SQLite）后端，智能体层用 LangGraph 多智能体（主智能体 + 回顾/记忆管理子智能体，ADR-0005），桌面壳 **Tauri 2**（`frontend/src-tauri/`，Rust 壳 + 后端 PyInstaller sidecar，见模块 16）。
+- 设计已收口，版本文档体系「一版一夹」已建立；`src/`、`frontend/`、`tests/` 按各模块文档的 todolist 逐个推进（v0.1.0～v0.2.0 均已完成并发布；v0.1.2 补充修复 12 待实机复验；v0.2.0 主动陪伴已发布，06 覆盖安装与干净机器验证待回填；v0.3.0 陪伴感深化已发布（2026-10-13，00~04 全部完成，覆盖安装验证待回填））。技术形态已定：Vue（Vite）前端 + Python（FastAPI + APScheduler + SQLAlchemy + SQLite）后端，智能体层用 LangGraph 多智能体（主智能体 + 回顾/记忆管理子智能体，ADR-0005），桌面壳 **Tauri 2**（`frontend/src-tauri/`，Rust 壳 + 后端 PyInstaller sidecar，见模块 16）。
 - 实测已确认：用户 model 为推理型（deepseek v4.1 flash，思考 token 计入 max_tokens 且长度随机），生成参数可由用户在设置里调整（温度默认 1.1、思考强度默认 low，存 settings 表，`buildChatModel` 真实应用），其余固定项与三级流式兜底不可动；危机关键词表中的变体来自真实对话验证，改动需谨慎。
 - Python 环境已用 uv 初始化：Python 3.12，虚拟环境 `.venv/`，依赖清单 `pyproject.toml`，锁文件 `uv.lock`。
 - 六条 ADR 已落盘 `docs/adr/`；版本文档总体入口 `docx/README.md`（路线图 + 进度树），当前开发版本 v0.3.0 陪伴感深化（总纲 `docx/v0.3.0/README.md`，模块文档 00~04 与拆分后的实施计划 plan-00~03 已建）。
