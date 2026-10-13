@@ -8,11 +8,11 @@
 
 ## 当前状态
 
-- 设计已收口，文件树与 v0.1.0 文档体系已建立；`src/`、`frontend/`、`tests/` 按各模块文档的 todolist 逐个推进（01-10、11-16 已完成；v0.1.1 已发布——桌面壳迁移 Tauri 2，干净机器验证待做）。技术形态已定：Vue（Vite）前端 + Python（FastAPI + APScheduler + SQLAlchemy + SQLite）后端，智能体层用 LangGraph 多智能体（主智能体 + 回顾/记忆管理子智能体，ADR-0005），桌面壳 **Tauri 2**（`frontend/src-tauri/`，Rust 壳 + 后端 PyInstaller sidecar，见模块 16）。
+- 设计已收口，版本文档体系「一版一夹」已建立；`src/`、`frontend/`、`tests/` 按各模块文档的 todolist 逐个推进（v0.1.0～v0.1.2 均已完成并发布；v0.1.2 用户实机验证通过，补充修复 12 待复验；v0.2.0 主动陪伴进行中——范围已收口，模块文档 00~06 已建、00 已完成）。技术形态已定：Vue（Vite）前端 + Python（FastAPI + APScheduler + SQLAlchemy + SQLite）后端，智能体层用 LangGraph 多智能体（主智能体 + 回顾/记忆管理子智能体，ADR-0005），桌面壳 **Tauri 2**（`frontend/src-tauri/`，Rust 壳 + 后端 PyInstaller sidecar，见模块 16）。
 - 实测已确认：用户 model 为推理型（deepseek v4.1 flash，思考 token 计入 max_tokens 且长度随机），生成参数可由用户在设置里调整（温度默认 1.1、思考强度默认 low，存 settings 表，`buildChatModel` 真实应用），其余固定项与三级流式兜底不可动；危机关键词表中的变体来自真实对话验证，改动需谨慎。
 - Python 环境已用 uv 初始化：Python 3.12，虚拟环境 `.venv/`，依赖清单 `pyproject.toml`，锁文件 `uv.lock`。
-- 四条 ADR 已落盘 `docs/adr/`；当前版本总纲在 `docx/v0.1.0/README.md`（含里程碑与待定决议）。
-- 尚未初始化 git 仓库（`.gitignore` 已备好）。
+- 六条 ADR 已落盘 `docs/adr/`；版本文档总体入口 `docx/README.md`（路线图 + 进度树），当前开发版本 v0.2.0（总纲 `docx/v0.2.0/README.md`，模块文档 00~06 已建）。
+- git 仓库已初始化，远程 GitHub（HTTPS）；v0.1.0～v0.1.2 已发布 Release。
 - 开发者环境：Windows，Shell 为 Git Bash / PowerShell。
 
 ## 环境与版本管理（uv）
@@ -36,7 +36,9 @@
 
 记录（文字 + 图片）→ 后台分析（产出心情记录）→ 唤醒对话。危机应对（关键词初筛 + LLM 复判，姿态为共情 + 提供求助资源）随分析/对话链路进第一版。跨天后日整合（11 模块）：当天条目纯程序整合成一篇日记，模型分析出日心情并从中沉淀长期记忆。
 
-第二波再做，**不要提前实现**：定时关怀、信号触发、人格模板、回顾可视化、设置界面、密钥加密存储。
+第二波（v0.2.0 主动陪伴，进行中）范围：主动陪伴（可选开启、默认关闭；三档「冷淡 / 正常 / 关心」按频率在 09:00–22:30 内随机开口，消息追加进最近活跃会话；未开启时与现状一致）、人格模板（默认人格随包 + 用户自定义 `soul.md`，每条消息发送前读取）、设置整理（模型 / 陪伴 / 人格三页）、托盘常驻与系统通知、会话删除（只删这次对话本身，物理删除、不可恢复）。详见 `docx/v0.2.0/README.md`。
+
+第三波（v0.3.0）再做，**不要提前实现**：回顾可视化、密钥加密存储。
 
 ## 产品不变量（改代码时不得破坏）
 
