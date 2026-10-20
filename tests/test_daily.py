@@ -20,6 +20,7 @@ from down_note.agent import llm as agentLlm
 from down_note.agent import memoryAgent
 from down_note.agent.tools import queryDiaries
 from down_note.app import createApp
+from down_note.core import tasks
 from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker
 from down_note.db import database, models
 
@@ -136,7 +137,7 @@ def test_consolidateMergesPastDayAndIsIdempotent(dbFile):
         models.addEntry(db, "晚上好些了。", None, "2026-10-05T21:00:00")
         models.addEntry(db, "今天写的。", None, f"{TODAY}T10:00:00")
 
-    scheduler.consolidatePastDays()
+    tasks.consolidatePastDays()
 
     with database.getDb() as db:
         digest = models.getDailyEntry(db, "2026-10-05")
@@ -150,7 +151,7 @@ def test_consolidateMergesPastDayAndIsIdempotent(dbFile):
         assert models.listPastDaysMissingDigest(db, TODAY) == []
 
     # 幂等：二跑不再新增
-    scheduler.consolidatePastDays()
+    tasks.consolidatePastDays()
     with database.getDb() as db:
         dailies = db.execute(
                 select(models.Entry).where(models.Entry.kind == "daily")
@@ -181,7 +182,7 @@ def test_scanAndConsolidateAnalyzesDigestThenFeedsMemory(dbFile, monkeypatch):
 
     monkeypatch.setattr(memoryAgent, "runDiaryMemory", _fakeDiaryMemory)
 
-    scheduler.scanAndConsolidate()
+    tasks.scanAndConsolidate()
 
     with database.getDb() as db:
         digest = models.getDailyEntry(db, "2026-10-05")
@@ -194,14 +195,14 @@ def test_scanAndConsolidateAnalyzesDigestThenFeedsMemory(dbFile, monkeypatch):
     assert "2026-10-05" in ran[0][1]
 
     # 二跑：没有新工作，不再触发沉淀
-    scheduler.scanAndConsolidate()
+    tasks.scanAndConsolidate()
     assert len(ran) == 1
 
 
 def test_diaryMemorySkippedWhenNotConfigured(dbFile, monkeypatch):
     with database.getDb() as db:
         models.addEntry(db, "一句话。", None, "2026-10-05T21:00:00")
-    scheduler.consolidatePastDays()
+    tasks.consolidatePastDays()
     with database.getDb() as db:
         digest = models.getDailyEntry(db, "2026-10-05")
         models.markEntryAnalyzed(db, digest.id)
@@ -212,7 +213,7 @@ def test_diaryMemorySkippedWhenNotConfigured(dbFile, monkeypatch):
             "runDiaryMemory",
             lambda cfg, diaryText, moodsText, memoriesText: ran.append(diaryText) or "x",
         )
-    scheduler.generateDiaryMemories()  # 未配置模型 → 整体跳过，且不落标记
+    tasks.generateDiaryMemories()  # 未配置模型 → 整体跳过，且不落标记
 
     assert ran == []
     with database.getDb() as db:
@@ -224,7 +225,7 @@ def test_diaryMemoryRunsRealGraphWithToolCall(dbFile, monkeypatch):
     with database.getDb() as db:
         _configure(db)
         models.addEntry(db, "医生说，林晓这个名字挺好听的。", None, "2026-10-05T21:00:00")
-    scheduler.consolidatePastDays()
+    tasks.consolidatePastDays()
     with database.getDb() as db:
         digest = models.getDailyEntry(db, "2026-10-05")
         models.markEntryAnalyzed(db, digest.id)
@@ -237,7 +238,7 @@ def test_diaryMemoryRunsRealGraphWithToolCall(dbFile, monkeypatch):
         )
     monkeypatch.setattr(agentLlm, "buildChatModel", lambda cfg, **kw: model)
 
-    scheduler.generateDiaryMemories()
+    tasks.generateDiaryMemories()
 
     with database.getDb() as db:
         memories = models.listLongTermMemories(db)
@@ -319,7 +320,7 @@ def test_consolidatePublishesDigestEvent(dataDir, dbFile):
     async def _drive() -> dict:
         queue = broker.subscribe(ENTRY_EVENTS_CHANNEL)
         try:
-            scheduler.consolidatePastDays()
+            tasks.consolidatePastDays()
             return await asyncio.wait_for(queue.get(), timeout=1)
         finally:
             broker.unsubscribe(ENTRY_EVENTS_CHANNEL, queue)

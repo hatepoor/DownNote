@@ -27,6 +27,10 @@ def upsertChatSession(db: Session, sessionId: str, activeAt: str) -> None:
         session.last_active_at = activeAt
 
 
+def getSessionById(db: Session, sessionId: str) -> ChatSession | None:
+    """按 id 取会话。存在性判断与读取共用这一个入口，api / core 不直接 db.get。"""
+    return db.get(ChatSession, sessionId)
+
 def listSessionsNeedingMaintenance(db: Session, now: str) -> list[str]:
     """有新消息的会话（从未维护过，或 last_active_at 晚于上次维护时间）。"""
     sessions = db.execute(select(ChatSession)).scalars().all()

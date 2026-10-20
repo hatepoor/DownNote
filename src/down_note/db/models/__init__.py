@@ -24,6 +24,7 @@ from down_note.db.models.entry import (
         listEntryDays,
         listPastDaysMissingDigest,
         listUnanalyzedIds,
+        loadEntryWithMood,
         markEntryAnalyzed,
         mergeDayBlocks,
         resetStaleRunning,
@@ -58,6 +59,7 @@ from down_note.db.models.mood import Mood, clearMood, getMoodByEntry, listRecent
 from down_note.db.models.session import (
         ChatSession,
         deleteChatSession,
+        getSessionById,
         listRecentSessions,
         listSessionsNeedingMaintenance,
         markSessionMaintained,

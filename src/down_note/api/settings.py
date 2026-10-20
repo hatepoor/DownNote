@@ -12,16 +12,13 @@ from pydantic import BaseModel
 
 from down_note import config
 from down_note.agent.prompts.companion import DEFAULT_PERSONA
-from down_note.core import entryReply, persona
+from down_note.core import companion, entryReply, persona
 from down_note.db import database, models
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 REASONING_EFFORTS = ("", "low", "medium", "high")  # "" = 不向模型传该参数
-COMPANION_TIERS = ("cold", "normal", "caring")  # 冷淡 / 正常 / 关心
 DEFAULT_COMPANION_TIER = "normal"
-COMPANION_ENABLED_KEY = "companion_enabled"  # settings 键：主动陪伴开关（"1"/"0"）
-COMPANION_TIER_KEY = "companion_tier"
 
 
 class ModelSettingsRead(BaseModel):
@@ -98,19 +95,19 @@ def saveModelSettings(body: ModelSettingsWrite) -> dict[str, bool]:
 @router.get("/companion")
 def getCompanionSettings() -> CompanionSettingsRead:
     with database.getDb() as db:
-        enabled = models.getSetting(db, COMPANION_ENABLED_KEY) == "1"
-        tier = models.getSetting(db, COMPANION_TIER_KEY) or DEFAULT_COMPANION_TIER
+        enabled = models.getSetting(db, companion.ENABLED_KEY) == "1"
+        tier = models.getSetting(db, companion.TIER_KEY) or DEFAULT_COMPANION_TIER
         diaryReplyEnabled = entryReply.isReplyEnabled(db)
     return CompanionSettingsRead(enabled=enabled, tier=tier, diaryReplyEnabled=diaryReplyEnabled)
 
 
 @router.put("/companion")
 def saveCompanionSettings(body: CompanionSettingsWrite) -> dict[str, bool]:
-    if body.tier not in COMPANION_TIERS:
+    if body.tier not in companion.TIERS:
         raise HTTPException(status_code=400, detail="档位取值不合法")
     with database.getDb() as db:
-        models.setSetting(db, COMPANION_ENABLED_KEY, "1" if body.enabled else "0")
-        models.setSetting(db, COMPANION_TIER_KEY, body.tier)
+        models.setSetting(db, companion.ENABLED_KEY, "1" if body.enabled else "0")
+        models.setSetting(db, companion.TIER_KEY, body.tier)
         models.setSetting(db, entryReply.ENABLED_KEY, "1" if body.diaryReplyEnabled else "0")
     return {"ok": True}
 

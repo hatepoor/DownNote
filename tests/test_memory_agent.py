@@ -9,12 +9,10 @@ from langchain_core.messages import AIMessage
 
 from down_note.agent import llm as agentLlm
 from down_note.agent import memoryAgent
-from down_note.agent.tools.memory import add as memoryAddTool
-from down_note.agent.tools.memory import delete as memoryDeleteTool
-from down_note.agent.tools.memory import update as memoryUpdateTool
+from down_note.agent.tools import memory as memoryTools
 from down_note.config import ModelServiceConfig
+from down_note.core import tasks
 from down_note.db import database, models
-from down_note import scheduler
 
 CFG = ModelServiceConfig(baseUrl="http://model.local/v1", apiKey="sk-test", modelName="test-model")
 
@@ -80,7 +78,7 @@ def test_schedulerMaintainsOnlySessionsWithNewMessages(dbFile, monkeypatch):
         return "无需更新"
 
     monkeypatch.setattr(memoryAgent, "runMemoryMaintenance", _fakeRun)
-    scheduler.maintainMemories()
+    tasks.maintainMemories()
 
     assert len(ran) == 1
     assert "林晓" in ran[0]
@@ -88,7 +86,7 @@ def test_schedulerMaintainsOnlySessionsWithNewMessages(dbFile, monkeypatch):
         assert db.get(models.ChatSession, "s1").memory_maintained_at is not None
 
     # 二跑：无新消息的会话不再触发
-    scheduler.maintainMemories()
+    tasks.maintainMemories()
     assert len(ran) == 1
 
 
@@ -103,26 +101,25 @@ def test_schedulerSkipsWhenNotConfigured(dbFile, monkeypatch):
             "runMemoryMaintenance",
             lambda cfg, t, m, md: ran.append(t) or "x",
         )
-    scheduler.maintainMemories()
+    tasks.maintainMemories()
     assert ran == []  # 降级（无配置）整体跳过
 
 
 def test_memoryToolsNotifyFrontend(dbFile, monkeypatch):
     """三个记忆工具落库成功后都通知前端——对话 / 记忆维护 / 日整合共用这套工具。"""
     calls: list[str] = []
-    for module in (memoryAddTool, memoryUpdateTool, memoryDeleteTool):
-        monkeypatch.setattr(module, "notifyMemoryChanged", lambda: calls.append("memory"))
+    monkeypatch.setattr(memoryTools, "notifyMemoryChanged", lambda: calls.append("memory"))
 
-    added = memoryAddTool.addMemory.invoke({"category": "psych", "content": "喜欢跑步"})
+    added = memoryTools.addMemory.invoke({"category": "psych", "content": "喜欢跑步"})
     assert added.startswith("已新增记忆")
-    assert memoryUpdateTool.updateMemory.invoke({"memoryId": 1, "content": "平时喜欢跑步"}) == "已更新记忆 #1"
-    assert memoryDeleteTool.deleteMemory.invoke({"memoryId": 1}) == "已删除记忆 #1"
+    assert memoryTools.updateMemory.invoke({"memoryId": 1, "content": "平时喜欢跑步"}) == "已更新记忆 #1"
+    assert memoryTools.deleteMemory.invoke({"memoryId": 1}) == "已删除记忆 #1"
     assert calls == ["memory", "memory", "memory"]
 
     # 失败路径（编号不存在）不通知
     calls.clear()
-    assert "不存在" in memoryUpdateTool.updateMemory.invoke({"memoryId": 999, "content": "x"})
-    assert "不存在" in memoryDeleteTool.deleteMemory.invoke({"memoryId": 999})
+    assert "不存在" in memoryTools.updateMemory.invoke({"memoryId": 999, "content": "x"})
+    assert "不存在" in memoryTools.deleteMemory.invoke({"memoryId": 999})
     assert calls == []
 
 
@@ -131,14 +128,14 @@ def test_updateMemoryToolCanRecategorize(dbFile):
     with database.getDb(dbFile) as db:
         memoryId = models.addLongTermMemory(db, "basic", "用户喜欢看漫画解说", updatedBy="agent")
 
-    reply = memoryUpdateTool.updateMemory.invoke(
+    reply = memoryTools.updateMemory.invoke(
             {"memoryId": memoryId, "content": "用户喜欢看漫画解说", "category": "psych"}
         )
     assert "已更新" in reply
     with database.getDb(dbFile) as db:
         assert models.getLongTermMemory(db, memoryId).category == "psych"
 
-    assert memoryUpdateTool.updateMemory.invoke(
+    assert memoryTools.updateMemory.invoke(
             {"memoryId": memoryId, "content": "x", "category": "hobby"}
         ) == "category 只能是 basic 或 psych"
     with database.getDb(dbFile) as db:

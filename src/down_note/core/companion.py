@@ -16,13 +16,12 @@ from datetime import datetime, time, timedelta
 from langchain_core.messages import HumanMessage
 
 from down_note import config
-from down_note.agent import llm, mainAgent
-from down_note.agent.checkpointer import getCheckpointer
-from down_note.agent.context import nowIso, refreshSystemPrompt
+from down_note.agent import llm
+from down_note.agent.context import nowIso
 from down_note.agent.prompts import CARE_INSTRUCTION, SIGNAL_CARE_INSTRUCTION
-from down_note.agent.tools import getCurrentTime
+from down_note.agent.turn import runAgentTurn
 from down_note.core import signals
-from down_note.core.events import broker, notifyProactiveMessage, turnLock
+from down_note.core.events import broker, notifyProactiveMessage
 from down_note.db import database, models
 
 logger = logging.getLogger(__name__)
@@ -31,6 +30,8 @@ STATE_KEY = "companion_state"  # settings 键：引擎状态 JSON（键名驼峰
 ENABLED_KEY = "companion_enabled"
 TIER_KEY = "companion_tier"
 TIERS = ("cold", "normal", "caring")
+# 开发自测（托盘「试一次开口」）：grace=跳过启动缓冲，nextAt=跳过未到点（频率等待）
+DEV_SKIP_KINDS = frozenset({"grace", "nextAt"})
 
 # 表一：计时与计数（基准值，实机按体感微调）
 TIER_INTERVAL_MINUTES = {
@@ -125,21 +126,24 @@ def _skipReason(
         state: dict,
         tier: str,
         now: datetime,
-        ignoreTiming: bool,
-        ignoreNextAt: bool = False,
+        skipKinds: set[str] | frozenset[str] = frozenset(),
     ) -> str | None:
     """表一 / 表二 / 表四判定：返回 None 表示可以开口，否则返回跳过原因（便于日志与测试）。
 
-    ignoreTiming（开发自测口子）：跳过"启动缓冲"与"未到点"两条等待，其余照常。
-    ignoreNextAt（02-信号触发）：只豁免"未到点"（频率等待）——启动缓冲、窗口、上限、
-    让路、退避全部照常；刚启动就开口很突兀，信号的价值在"不等频率"而非"不等启动"。
+    skipKinds 是具名豁免集合：
+        "grace"  —— 跳过启动缓冲；
+        "nextAt" —— 跳过"未到点"（频率等待）。
+    窗口、当日上限、未回退避、让路永远不被豁免——它们是产品的礼貌边界，不是等待。
+
+    调用方：开发自测传 DEV_SKIP_KINDS；信号触发只追加 "nextAt"（刚启动就开口很突兀，
+    信号的价值在"不等频率"而非"不等启动"）。
     """
-    if not ignoreTiming and now - _processStartedAt < timedelta(minutes=STARTUP_GRACE_MINUTES):
+    if "grace" not in skipKinds and now - _processStartedAt < timedelta(minutes=STARTUP_GRACE_MINUTES):
         return "启动缓冲"
     if not _insideWindow(now):
         return "窗口外"
     nextAt = _parseTs(state.get("nextAt"))
-    if not ignoreTiming and not ignoreNextAt and nextAt is not None and now < nextAt:
+    if "nextAt" not in skipKinds and nextAt is not None and now < nextAt:
         return "未到点"
     lastOpenAt = _parseTs(state.get("lastOpenAt"))
     if lastOpenAt is not None and now - lastOpenAt < timedelta(minutes=MIN_GAP_MINUTES):
@@ -172,39 +176,38 @@ def _generateOpening(cfg, sessionId: str, instruction: str = CARE_INSTRUCTION) -
     "一次"指不为"是否开口"额外问模型；实际可能包含工具调用与空回复兜底的多次模型请求。
     instruction 默认普通主动开口；信号开口传带信号描述的 SIGNAL_CARE_INSTRUCTION（02）。
     """
-    graph = mainAgent.buildMainAgent(cfg, getCheckpointer(), sessionId)
-    refreshSystemPrompt(graph, sessionId, getCurrentTime.invoke({}))
-    replyText = ""
-    with turnLock(sessionId):
-        for chunk, meta in graph.stream(
-                {"messages": [HumanMessage(content=instruction)]},
-                {"configurable": {"thread_id": sessionId}},
-                stream_mode="messages",
-            ):
-            if meta.get("langgraph_node") != "agent":
-                continue
-            text = llm.messageText(chunk)
-            if text:
-                replyText += text
-    return replyText.strip()
+    chunks = runAgentTurn(
+            cfg,
+            sessionId,
+            [HumanMessage(content=instruction)],
+            persist=False,
+        )
+    return "".join(chunks).strip()
 
 
-def patrol(now: datetime | None = None, ignoreTiming: bool = False) -> dict:
+def patrol(
+        now: datetime | None = None,
+        skipKinds: set[str] | frozenset[str] = frozenset(),
+    ) -> dict:
     """巡检一次：该开口就发起生成；返回 {opened, reason, sessionId}。
 
-    ignoreTiming=True（开发自测口子 / 托盘「试一次开口」）：跳过"启动缓冲"与"未到点"，
-    其余判定照常——让"我现在就想看看它怎么开口"不用等一两个小时。
+    skipKinds 仅用于开发自测（托盘「试一次开口」）：传 DEV_SKIP_KINDS 即跳过
+    "启动缓冲"与"未到点"，其余判定照常——让"我现在就想看看它怎么开口"不用等一两个小时。
+    生产调用不传，行为与未开启豁免时完全一致。
     """
     current = now or datetime.now()
     if not _patrolLock.acquire(blocking=False):
         return {"opened": False, "reason": "上一次巡检还在跑", "sessionId": None}
     try:
-        return _patrolOnce(current, ignoreTiming)
+        return _patrolOnce(current, skipKinds)
     finally:
         _patrolLock.release()
 
 
-def _patrolOnce(current: datetime, ignoreTiming: bool = False) -> dict:
+def _patrolOnce(
+        current: datetime,
+        skipKinds: set[str] | frozenset[str] = frozenset(),
+    ) -> dict:
     with database.getDb() as db:
         if models.getSetting(db, ENABLED_KEY) != "1":
             return {"opened": False, "reason": "主动陪伴未开启", "sessionId": None}
@@ -220,10 +223,10 @@ def _patrolOnce(current: datetime, ignoreTiming: bool = False) -> dict:
             state["missed"] = 0  # 表四：主动开口之后用户回过话 → 未回计数清零
         hit = signals.detectSignal(db, current)  # 02：信号优先于频率
         if hit is not None:
-            # 只豁免「未到点」：启动缓冲 / 窗口 / 上限 / 让路 / 退避全部照常
-            reason = _skipReason(state, tier, current, ignoreTiming, ignoreNextAt=True)
+            # 只追加「未到点」豁免：启动缓冲 / 窗口 / 上限 / 让路 / 退避全部照常
+            reason = _skipReason(state, tier, current, set(skipKinds) | {"nextAt"})
         else:
-            reason = _skipReason(state, tier, current, ignoreTiming)
+            reason = _skipReason(state, tier, current, skipKinds)
         if reason is not None:
             _saveState(db, state)
             logger.debug("主动陪伴跳过：%s", reason)
@@ -254,7 +257,7 @@ def _patrolOnce(current: datetime, ignoreTiming: bool = False) -> dict:
 
     createdAt = nowIso()
     with database.getDb() as db:
-        if db.get(models.ChatSession, sessionId) is None:
+        if models.getSessionById(db, sessionId) is None:
             logger.info("主动陪伴：目标会话已被删除，本次丢弃")
             return {"opened": False, "reason": "目标会话已被删除", "sessionId": sessionId}  # 表三：不改投、不新建
         models.addMessage(db, sessionId, "assistant", text, createdAt)

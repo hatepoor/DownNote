@@ -33,4 +33,4 @@ def patrolNow() -> dict:
     返回 {opened, reason, sessionId}——没开口时 reason 说明是哪条规则拦下的，
     实机测试时不用猜为什么没动静。生成要调模型，响应会等它几秒。
     """
-    return companion.patrol(ignoreTiming=True)
+    return companion.patrol(skipKinds=companion.DEV_SKIP_KINDS)

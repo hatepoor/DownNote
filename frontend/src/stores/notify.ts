@@ -5,11 +5,11 @@
 // 窗口一获得焦点就打开它——效果等同"点通知回到那条会话"。
 // 注意：开发态（target/debug）通知不带应用身份（AUMID），"点击 toast 唤起"归打包态验证。
 import { openNotifyEvents, type NotifyEvent } from '../api'
-import { isTauri, requestOpenSession } from './appState'
+import { isTauri } from './shell'
+import { markPendingSession, requestOpenSession, takePendingSession } from './appState'
 
 const PENDING_TTL_MS = 10 * 60 * 1000 // 超时不再抢焦点：之后手动开窗不跳会话
 
-let pending: { sessionId: string; at: number } | null = null
 let started = false
 
 async function deliver(e: NotifyEvent): Promise<void> {
@@ -19,14 +19,11 @@ async function deliver(e: NotifyEvent): Promise<void> {
   const granted = (await isPermissionGranted()) || (await requestPermission()) === 'granted'
   if (!granted) return // 被拒就静默：消息仍落在会话里，只是没有提醒
   sendNotification({ title: e.title, body: e.body })
-  pending = { sessionId: e.sessionId, at: Date.now() }
+  markPendingSession(e.sessionId)
 }
 
 function consumePending(): void {
-  if (!pending) return
-  const { sessionId, at } = pending
-  pending = null
-  if (Date.now() - at > PENDING_TTL_MS) return
+  const sessionId = takePendingSession(PENDING_TTL_MS)
   if (sessionId) requestOpenSession(sessionId)
 }
 

@@ -14,7 +14,7 @@ import {
   type ChatStreamEvent,
   type Hotline,
 } from '../../api'
-import { degraded, pendingSessionId, refreshConfig } from '../../stores/appState'
+import { degraded, pendingSession, refreshConfig } from '../../stores/appState'
 import { useScrollFade } from '../../utils/scrollFade'
 import ChatBubble from './ChatBubble.vue'
 import ChatHistoryDrawer from './ChatHistoryDrawer.vue'
@@ -146,9 +146,9 @@ function clearSession(): void {
 }
 
 // 通知点击（窗口被唤起）→ 落到产生该消息的会话（01 模块）
-watch(pendingSessionId, (id) => {
-  if (!id) return
-  void openFromNotification(id)
+watch(pendingSession, (pending) => {
+  if (!pending) return
+  void openFromNotification(pending.sessionId)
 })
 
 async function openFromNotification(id: string): Promise<void> {
@@ -157,7 +157,7 @@ async function openFromNotification(id: string): Promise<void> {
   } catch {
     // 目标会话可能已被删除：忽略即可（界面收口由 onSessionDeleted 负责）
   } finally {
-    pendingSessionId.value = null
+    pendingSession.value = null
   }
 }
 

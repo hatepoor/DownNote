@@ -22,15 +22,15 @@ from down_note.agent.context import (
         buildDiariesText,
         buildMemoriesText,
         buildSystemPrompt,
-        forgetPromptBlocks,
         nowIso,
         primePromptBlocks,
         promptBlocks,
-        refreshSystemPrompt,
         resolvePersonaText,
     )
 from down_note.agent.prompts import WAKE_INSTRUCTION
+from down_note.agent.session import dropSession
 from down_note.agent.tools import getCurrentTime
+from down_note.agent.turn import runAgentTurn
 from down_note.core import crisis
 from down_note.core.prompts import CRISIS_RESPONSE_GUIDELINES
 from down_note.core.events import broker, turnLock
@@ -81,27 +81,12 @@ def _streamAgentTurn(sessionId: str, cfg, messages: list):
 
     def eventStream():
         yield _sse({"type": "start", "sessionId": sessionId})
-        replyText = ""
-        with turnLock(sessionId):
-            graph = mainAgent.buildMainAgent(cfg, getCheckpointer(), sessionId)
-            refreshSystemPrompt(graph, sessionId, getCurrentTime.invoke({}))
-            try:
-                for chunk, meta in graph.stream(
-                        {"messages": messages},
-                        {"configurable": {"thread_id": sessionId}},
-                        stream_mode="messages",
-                    ):
-                    if meta.get("langgraph_node") != "agent":
-                        continue
-                    text = llm.messageText(chunk)
-                    if text:
-                        replyText += text
-                        yield _sse({"type": "delta", "text": text})
-            except (llm.ModelConfigError, llm.ModelUnavailableError):
-                yield _sse({"type": "error", "message": MODEL_DOWN_MESSAGE})
-                return
-            with database.getDb() as db:
-                models.addMessage(db, sessionId, "assistant", replyText, nowIso())
+        try:
+            for text in runAgentTurn(cfg, sessionId, messages):
+                yield _sse({"type": "delta", "text": text})
+        except (llm.ModelConfigError, llm.ModelUnavailableError):
+            yield _sse({"type": "error", "message": MODEL_DOWN_MESSAGE})
+            return
         yield _sse({"type": "done"})
 
     return StreamingResponse(eventStream(), media_type="text/event-stream")
@@ -122,26 +107,12 @@ def wake() -> StreamingResponse:
 
     def eventStream():
         yield _sse({"type": "start", "sessionId": sessionId, "wakeNote": hasDiaries})
-        replyText = ""
-        with turnLock(sessionId):
-            graph = mainAgent.buildMainAgent(cfg, getCheckpointer(), sessionId)
-            try:
-                for chunk, meta in graph.stream(
-                        {"messages": messages},
-                        {"configurable": {"thread_id": sessionId}},
-                        stream_mode="messages",
-                    ):
-                    if meta.get("langgraph_node") != "agent":
-                        continue
-                    text = llm.messageText(chunk)
-                    if text:
-                        replyText += text
-                        yield _sse({"type": "delta", "text": text})
-            except (llm.ModelConfigError, llm.ModelUnavailableError):
-                yield _sse({"type": "error", "message": MODEL_DOWN_MESSAGE})
-                return
-            with database.getDb() as db:
-                models.addMessage(db, sessionId, "assistant", replyText, nowIso())
+        try:
+            for text in runAgentTurn(cfg, sessionId, messages):
+                yield _sse({"type": "delta", "text": text})
+        except (llm.ModelConfigError, llm.ModelUnavailableError):
+            yield _sse({"type": "error", "message": MODEL_DOWN_MESSAGE})
+            return
         yield _sse({"type": "done"})
 
     return StreamingResponse(eventStream(), media_type="text/event-stream")
@@ -153,7 +124,7 @@ def chatTurn(req: ChatTurnRequest) -> StreamingResponse:
     if not content:
         raise HTTPException(status_code=400, detail="消息不能为空")
     with database.getDb() as db:
-        session = db.get(models.ChatSession, req.sessionId)
+        session = models.getSessionById(db, req.sessionId)
         if session is None:
             raise HTTPException(status_code=404, detail="会话不存在")
         cfg = config.getModelServiceConfig(db)
@@ -234,17 +205,11 @@ def chatSessions() -> list[ChatSessionRead]:
 
 @router.delete("/sessions/{sessionId}", status_code=204)
 def deleteChatSession(sessionId: str) -> None:
-    """删掉这次对话本身：消息 + 会话 + 图状态（checkpoint）三处物理清，幂等。
+    """删掉这次对话本身：图状态、消息、会话行、提示词快照一次清，幂等。
 
     长期记忆一律不动（用户口径："只删这次对话，仅此而已"）；重复删除无副作用。
-    checkpoint 先清（SqliteSaver.delete_thread 自带幂等建表）——图状态残留会让
-    模型在删完后仍能复述这段对话。
     """
-    getCheckpointer().delete_thread(sessionId)
-    with database.getDb() as db:
-        models.deleteSessionMessages(db, sessionId)
-        models.deleteChatSession(db, sessionId)
-    forgetPromptBlocks(sessionId)
+    dropSession(sessionId)
 
 
 async def chatEventStream(sessionId: str):

@@ -11,7 +11,8 @@ import MemoryPanel from './components/memory/MemoryPanel.vue'
 import OnboardingGuide from './components/shell/OnboardingGuide.vue'
 import SettingsDialog from './components/shell/SettingsDialog.vue'
 import TitleBar from './components/shell/TitleBar.vue'
-import { bindTitlebarSync, currentView, degraded, isShell, refreshConfig, switchView, theme, toggleTheme } from './stores/appState'
+import { bindTitlebarSync, isShell } from './stores/shell'
+import { currentView, degraded, refreshConfig, switchView, theme, toggleTheme } from './stores/appState'
 import { startNotifyBridge } from './stores/notify'
 import { hasSeenOnboarding, markOnboardingDone } from './stores/onboarding'
 import { todayString } from './utils/time'
@@ -109,7 +110,7 @@ function finishOnboarding(): void {
 }
 
 onMounted(async () => {
-  bindTitlebarSync()
+  bindTitlebarSync(() => theme.value === 'dark')
   void startNotifyBridge() // 系统通知桥：主动开口 → 通知 → 回窗落到对应会话（01 模块）
   await refreshConfig()
   const saved = Number(localStorage.getItem(DIARY_WIDTH_KEY))

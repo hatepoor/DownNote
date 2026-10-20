@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from down_note import config
 from down_note.core import analysis
+from down_note.core import pipeline
 from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker, sseFrame
 from down_note.db import database, models
 
@@ -92,10 +93,10 @@ def replyToRead(reply: models.EntryReply | None) -> ReplyRead | None:
 
 
 def entryToRead(entry: models.Entry, reply: models.EntryReply | None = None) -> EntryRead:
-    """ORM 条目 → 读模型（含心情记录与图片地址）；entry 需在会话内且 mood 可加载。
+    """ORM 条目 → 读模型（含心情记录与图片地址）；必须在数据库会话内调用。
 
-    reply 由调用方按需传入：列表与日页先用 getRepliesByEntries 批量取回再逐条装配，
-    避免逐条查询（N+1）；单条响应不传，reply 即为 None。
+    entry 来自带 mood 的查询：列表用 `models.listEntriesWithMood`，单条用
+    `models.loadEntryWithMood`。reply 仍由调用方按需传入（列表批量装配避免 N+1）。
     """
     return EntryRead(
             id=entry.id,
@@ -151,7 +152,7 @@ def createEntry(
         entryId = models.addEntry(db, text, imagePath, createdAt)
 
     # 上传即析：响应返回后在后台线程执行；失败由兜底扫描收口
-    backgroundTasks.add_task(analysis.analyzeEntry, entryId)
+    backgroundTasks.add_task(pipeline.analyzeAndReply, entryId)
     return EntryRead(
             id=entryId,
             content=text,
@@ -210,15 +211,15 @@ def updateEntry(
     if not text:
         raise HTTPException(status_code=400, detail="内容不能为空")
     with database.getDb() as db:
-        entry = models.getEntry(db, entryId)
+        entry = models.loadEntryWithMood(db, entryId)
         if entry is None:
             raise HTTPException(status_code=404, detail="条目不存在")
         if entry.created_at[:10] != date.today().isoformat():
             raise HTTPException(status_code=400, detail="过去的日记不能修改")
         models.updateEntryContent(db, entryId, text)
         models.clearMood(db, entryId)
-        result = entryToRead(models.getEntry(db, entryId))
-    backgroundTasks.add_task(analysis.analyzeEntry, entryId)
+        result = entryToRead(models.loadEntryWithMood(db, entryId))
+    backgroundTasks.add_task(pipeline.analyzeAndReply, entryId)
     return result
 
 
@@ -230,13 +231,13 @@ def reanalyzeEntry(entryId: int, backgroundTasks: BackgroundTasks) -> EntryRead:
     旧心情记录不清——新结果抵达前界面仍显示上一版，避免闪空。
     """
     with database.getDb() as db:
-        entry = models.getEntry(db, entryId)
+        entry = models.loadEntryWithMood(db, entryId)
         if entry is None:
             raise HTTPException(status_code=404, detail="条目不存在")
         if entry.analyze_state != models.ANALYZE_RUNNING:
             models.setAnalyzeState(db, entryId, models.ANALYZE_PENDING)
         result = entryToRead(entry)
-    backgroundTasks.add_task(analysis.analyzeEntry, entryId)
+    backgroundTasks.add_task(pipeline.analyzeAndReply, entryId)
     return result
 
 
@@ -263,7 +264,7 @@ def chatAboutReply(entryId: int) -> ReplyRead:
         if (
                 reply.session_message_id is not None
                 and reply.session_id is not None
-                and db.get(models.ChatSession, reply.session_id) is not None
+                and models.getSessionById(db, reply.session_id) is not None
             ):
             return replyToRead(reply)  # 已转移且会话仍在：直接回现状，不重复落库
         sessions = models.listRecentSessions(db, limit=1)

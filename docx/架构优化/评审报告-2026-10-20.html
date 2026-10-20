@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>架构评审 — 低落日记 down_note</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mod-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-3">
+        <h1 class="text-3xl font-serif">架构评审 · 低落日记 down_note</h1>
+        <p class="text-sm text-slate-500">2026-10-20 · 热点取自近 60 次提交（app.py / scheduler.py / core/events.py / api/entries.py / App.vue）</p>
+        <div class="flex flex-wrap gap-4 text-xs text-slate-600 border border-slate-200 bg-white rounded-lg px-4 py-3 w-fit">
+          <span class="flex items-center gap-2"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span>module</span>
+          <span class="flex items-center gap-2"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#64748b" class="seam"/></svg>seam</span>
+          <span class="flex items-center gap-2"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#dc2626" stroke-width="2"/></svg>泄漏</span>
+          <span class="flex items-center gap-2"><span class="inline-block w-4 h-3 deep rounded-sm"></span>deep module</span>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-10">
+
+        <!-- 候选 1 -->
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif">1 · 主图回合没有家：同一段 stream 样板抄了四份</h2>
+            <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">api/chat.py:79-107,123-147 · core/companion.py:169-189 · agent/mainAgent.py:32-64 · tests/test_companion_engine.py:47-55</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="mod-label text-slate-500 mb-2">Before · 四处复制</p>
+              <pre class="mermaid">
+flowchart TB
+  A[chatTurn 端点] --> S
+  B[wake 端点] --> S
+  C[危机回合] --> S
+  D[companion 开口] --> S
+  subgraph S[" "]
+    direction TB
+    S1[建图+刷新提示词] --> S2[turnLock 闸门]
+    S2 --> S3["graph.stream 过滤 chunk"]
+    S3 --> S4[累加文本+落库]
+  end
+  classDef red stroke:#dc2626,stroke-width:2px;
+  class A,B,C,D red
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="mod-label text-slate-500 mb-2">After · 一个深 module</p>
+              <div class="space-y-3 pt-2">
+                <div class="flex gap-2 justify-center text-xs">
+                  <span class="border border-slate-400 bg-white rounded px-2 py-1">chatTurn</span>
+                  <span class="border border-slate-400 bg-white rounded px-2 py-1">wake</span>
+                  <span class="border border-slate-400 bg-white rounded px-2 py-1">危机</span>
+                  <span class="border border-slate-400 bg-white rounded px-2 py-1">主动开口</span>
+                </div>
+                <div class="text-center text-slate-400 text-xs">↓ 造消息 / 消费文本流</div>
+                <div class="deep rounded-lg text-white p-3">
+                  <p class="mod-label text-emerald-300">runAgentTurn(cfg, sessionId, messages)</p>
+                  <p class="text-xs text-slate-400 mt-2">闸门 · 提示词刷新 · chunk 过滤 · 落库<br/>（内部实现，调用方不可见）</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>问题</strong>：跑一次主图回合的完整知识散在四个调用点各复制一遍，LangGraph 的 stream 细节直接泄漏到 api 层与 core 层；测试不得不伪造 chunk/meta 二元组形状。</p>
+          <p class="text-sm"><strong>方案</strong>：agent 层造一个回合深 module，四处调用只剩「造输入消息 + 消费文本流」。</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>interface 收缩：过滤规则只存在一份</li>
+            <li>测试不再摸 LangGraph 内部形状</li>
+            <li>locality：回合 bug 集中于一个 module</li>
+          </ul>
+          <p class="text-xs text-slate-500">与 ADR-0005 无冲突（消息严格追加、checkpoint 非记忆载体均保持）。</p>
+        </article>
+
+        <!-- 候选 2 -->
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif">2 · settings 键双头管理与巡逻旗标</h2>
+            <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">core/companion.py:30-32,124-155,192-196 · api/settings.py:23-24,114,138 · api/companion.py:29-36</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="mod-label text-slate-500 mb-3">Before · 字面值两处定义 + 布尔旗标</p>
+              <div class="space-y-3 text-xs">
+                <div class="flex items-center gap-2">
+                  <div class="border border-slate-400 bg-white rounded p-2 flex-1 text-center">core/companion.py<br/><span class="font-mono">ENABLED_KEY = "companion_enabled"</span></div>
+                  <svg width="30" height="12"><line x1="0" y1="6" x2="30" y2="6" class="leak" stroke-width="2"/></svg>
+                  <div class="border border-red-400 bg-red-50 rounded p-2 flex-1 text-center">api/settings.py<br/><span class="font-mono">COMPANION_ENABLED_KEY = 同字面值</span></div>
+                </div>
+                <p class="text-red-700">改键名改两处，编译期不报错，测试不会失败，实机才发现开关失效。</p>
+                <div class="border border-slate-300 bg-white rounded p-2">
+                  <span class="font-mono">patrol(ignoreTiming=…, ignoreNextAt=…)</span>
+                  <p class="text-slate-500 mt-1">开发自测口子以布尔旗标编码进生产 interface，_skipReason 分支随旗标组合翻倍。</p>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="mod-label text-slate-500 mb-3">After · 键单一归属 + 具名豁免</p>
+              <div class="space-y-3 text-xs">
+                <div class="deep rounded-lg text-white p-3">
+                  <p class="mod-label text-emerald-300">core/companion.py 拥有 ENABLED_KEY</p>
+                  <p class="text-slate-400 mt-1">api/settings.py 只 import —— entryReply / persona 已经是这个风格，补齐即可。</p>
+                </div>
+                <div class="border border-slate-400 bg-white rounded p-2">
+                  <span class="font-mono">patrol(now=…, skip={"timing"})</span>
+                  <p class="text-slate-500 mt-1">豁免规则是具名集合，不再是布尔真值表。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>问题</strong>：同一文件里两种键归属风格并存，说明「键归谁所有」没有规则；旗标把理解成本转嫁给真值表脑内模拟。</p>
+          <p class="text-sm"><strong>方案</strong>：键常量收口到 core 模块；自测口子从布尔旗标改为显式具名参数。</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>消除「实机才发现」类隐患</li>
+            <li>同一 seam 一种用法，可推断</li>
+            <li>interface 参数从真值表变为白名单</li>
+          </ul>
+          <p class="text-xs text-slate-500">与 ADR 无冲突。键收口是纯 dedup，可立即做；旗标重塑不必急。</p>
+        </article>
+
+        <!-- 候选 3 -->
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif">3 · db seam 两种用法并存：走门面与穿门面</h2>
+            <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">local-substitutable</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">api/chat.py:156 · core/companion.py:257 · api/entries.py:94-98 · db/database.py:59 · api/diaries.py:10</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="mod-label text-slate-500 mb-2">Before · seam 上有后门</p>
+              <pre class="mermaid">
+flowchart TB
+  A[api 层 / core 层] -->|约 50 个访问函数| M[models 门面]
+  A -.->|"db.get(...) 裸 Session"| DB[(SQLite)]
+  M --> DB
+  E[entryToRead] -.->|要求调用方维护 ORM 生命周期| A
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#991b1b;
+  linkStyle 1 stroke:#dc2626,stroke-width:2px;
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="mod-label text-slate-500 mb-2">After · seam 补齐到门面一侧</p>
+              <pre class="mermaid">
+flowchart TB
+  A[api 层 / core 层] --> M
+  subgraph M["models 门面（唯一 interface）"]
+    direction TB
+    F1[现有访问函数]
+    F2["sessionExists(db, id) 等补漏"]
+    F3["entryToRead 自取数据"]
+  end
+  M --> DB[(SQLite)]
+  classDef deep fill:#1e293b,color:#fff,stroke:#0f172a;
+  class M deep
+              </pre>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>问题</strong>：<code class="font-mono">db.get</code> 开了门面后门，审查者无法靠 models.* 的覆盖面推断数据访问面；<code class="font-mono">entryToRead</code> 的 docstring 把 DetachedInstanceError 风险转嫁给每个调用点的纪律。</p>
+          <p class="text-sm"><strong>方案</strong>：把裸 Session 调用收编为访问函数；<code class="font-mono">entryToRead</code> 改为自取数据，不再要求调用方维护 ORM 生命周期。</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>seam 一种用法，覆盖面可推断</li>
+            <li>ORM 生命周期回到 db 层内部</li>
+            <li>api 模块横向互 import 随之消解</li>
+          </ul>
+          <p class="text-xs text-slate-500">方向与 ADR-0006 一致（访问函数签名保持稳定），无冲突。</p>
+        </article>
+
+        <!-- 候选 4 -->
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif">4 · 会话生命周期散在三处，提示词快照缓存无 owner</h2>
+            <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">agent/context.py:107-155 · api/chat.py:121,235-247 · core/companion.py:176</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="mod-label text-slate-500 mb-3">Before · 删除一个会话 = 人肉对齐三步</p>
+              <div class="space-y-2 text-xs">
+                <div class="border-l-4 border-slate-400 bg-white px-3 py-2">checkpointer.delete_thread</div>
+                <div class="border-l-4 border-slate-400 bg-white px-3 py-2">models.deleteSessionMessages / deleteChatSession</div>
+                <div class="border-l-4 border-red-400 bg-red-50 px-3 py-2">forgetPromptBlocks（忘记调 → 脏快照残留，注释自证）</div>
+                <p class="text-red-700">正确性靠记忆维持：未来任何新的删除入口忘一步就埋雷。</p>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="mod-label text-slate-500 mb-3">After · 会话生命周期一个 interface</p>
+              <div class="deep rounded-lg text-white p-3 text-xs">
+                <p class="mod-label text-emerald-300">agent/session.py</p>
+                <p class="mt-2 font-mono">createSession() / dropSession(sessionId)</p>
+                <p class="text-slate-400 mt-2">checkpoint · 消息 · 快照失效，全部内收；缓存 dict 不再是模块级自由状态。</p>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>问题</strong>：缓存本身是必要复杂度（保 prefix cache），但四个自由函数 + 一个模块级 dict 摊开，删除语义散在三处靠人肉对齐。</p>
+          <p class="text-sm"><strong>方案</strong>：会话建/删/快照失效收成一处接口，端点只调一个函数。</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality：会话删除语义一处可见</li>
+            <li>快照不变量有了封装 owner</li>
+            <li>与候选 1 的回合 module 互相解套</li>
+          </ul>
+          <p class="text-xs text-slate-500">与 ADR 无冲突；与 03-会话删除模块文档口径一致，方向是补强。</p>
+        </article>
+
+        <!-- 候选 5 -->
+        <article id="c5" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif">5 · 「主动开口」链路七站跳转，scheduler 身份分裂</h2>
+            <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">scheduler.py:31-171 · core/companion.py · core/signals.py · core/events.py · core/analysis.py:154-158 · api/notify.py</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="mod-label text-slate-500 mb-2">Before · 实现位置按历史偶然分布</p>
+              <pre class="mermaid">
+flowchart LR
+  SCH["scheduler.py<br/>(4 个任务实现住这里)"] -->|"但 patrol 只注册不实现"| COM[core/companion]
+  COM --> SIG[core/signals]
+  COM --> EVT[core/events]
+  EVT --> SSE[api/notify SSE]
+  ANA[core/analysis] -->|"尾部 try/except 旁路"| REP[core/entryReply]
+  classDef amber stroke:#d97706,stroke-width:2px;
+  class SCH,ANA amber
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="mod-label text-slate-500 mb-3">After · 注册与实现各归其位</p>
+              <div class="space-y-2 text-xs">
+                <div class="border border-slate-400 bg-white rounded p-2">
+                  <p class="mod-label text-slate-500">scheduler.py = 纯注册表（浅得其所）</p>
+                  <p class="text-slate-500">所有任务实现移入 core/，或 patrol 判定搬入——二选一，消除双重身份。</p>
+                </div>
+                <div class="border border-slate-400 bg-white rounded p-2">
+                  <p class="mod-label text-slate-500">条目回应改事件订阅</p>
+                  <p class="text-slate-500">analysis 只发「分析完成」事件，reply 生成订阅它，因果链显式化。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>问题</strong>：理解「它为什么在此刻开口」要跳七站；scheduler 一半任务的实现住自己这、另一半住 core，归类标准不一致；「分析完成 → 可能有回应」的因果链藏在 analysis 函数体末尾。</p>
+          <p class="text-sm"><strong>方案</strong>：scheduler 变纯注册浅模块；条目回应触发从旁路调用改为事件订阅。</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>每个任务的判定+实现集中一处</li>
+            <li>因果链从函数体尾部移到事件</li>
+            <li>不必合文件，只归位</li>
+          </ul>
+          <div class="text-xs bg-amber-50 border border-amber-200 rounded px-3 py-2 text-amber-800">注意：「纯程序判定、模型只说内容」是 05 模块文档的产品决策，重整时不得把判定挪进模型调用。</div>
+        </article>
+
+        <!-- 候选 6 -->
+        <article id="c6" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif">6 · agent/tools 一工具一文件：浅 module 群</h2>
+            <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">agent/tools/（10 个 ~25 行实现文件 + 4 个纯 re-export 的 __init__.py）</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="mod-label text-slate-500 mb-3">Before · interface ≈ implementation</p>
+              <div class="flex items-end gap-3 justify-center h-40">
+                <div class="text-center">
+                  <div class="w-16 bg-slate-300 rounded-t" style="height:110px"></div>
+                  <div class="w-16 bg-slate-500 rounded-b" style="height:118px"></div>
+                  <p class="mod-label mt-1 text-slate-500">10 文件<br/>interface≈impl</p>
+                </div>
+                <div class="text-center">
+                  <div class="w-16 bg-slate-300 rounded-t" style="height:60px"></div>
+                  <div class="w-16 bg-slate-500 rounded-b" style="height:8px"></div>
+                  <p class="mod-label mt-1 text-slate-500">4 个 __init__<br/>纯转发</p>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">看 addMemory 的实现要穿过三层跳转；「Agent 有哪些工具、口径是什么」这个 prompt 工程全局视图被打散。</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="mod-label text-slate-500 mb-3">After · 一域一文件</p>
+              <div class="flex items-end gap-3 justify-center h-40">
+                <div class="text-center">
+                  <div class="w-20 bg-slate-300 rounded-t" style="height:20px"></div>
+                  <div class="w-20 rounded-b deep" style="height:120px"></div>
+                  <p class="mod-label mt-1 text-slate-500">tools/memory.py<br/>小 interface 深 impl</p>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">对照组：agent/llm.py —— 一个文件装下工厂+兜底+工具函数，深而内聚，是全场正面基准。</p>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>问题</strong>：每个 __init__.py 的 interface 与 implementation 同为「import 再导出」；工具 docstring 是给模型看的 prompt 资产，拆散后全局视图消失。</p>
+          <p class="text-sm"><strong>方案</strong>：按域合并为 tools/memory.py、tools/session.py 等，删掉桶式 __init__.py。</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>interface 不变，跳转少两层</li>
+            <li>工具口径一屏可见</li>
+            <li>deletion test：删桶文件是纯集中</li>
+          </ul>
+          <div class="text-xs bg-amber-50 border border-amber-200 rounded px-3 py-2 text-amber-800">与既有文档决策冲突：docx/v0.1.2/modules/00-结构重构.md 明确「一工具一文件」。动它之前需先修订该文档——这是它从 Strong 降为 Worth exploring 的唯一原因。</div>
+        </article>
+
+        <!-- 候选 7 -->
+        <article id="c7" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif">7 · 前端 appState 杂物抽屉与「通知回到会话」三段接力</h2>
+            <span class="text-xs px-2 py-1 rounded-full bg-slate-200 text-slate-700">Speculative</span>
+            <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">frontend/src/stores/appState.ts:13-148 · stores/notify.ts:15-38 · components/chat/ChatPanel.vue:149-160</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="mod-label text-slate-500 mb-2">Before · 两段同名 pending，三个文件接力</p>
+              <pre class="mermaid">
+flowchart LR
+  N["notify.ts<br/>let pending + TTL"] -->|"焦点事件"| A["appState.ts<br/>pendingSessionId"]
+  A -->|"watch 消费并清空"| C[ChatPanel.vue]
+  S["壳 adapter<br/>(isTauri/windowAction)"] -.混住.-> A
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  linkStyle 2 stroke:#dc2626,stroke-width:2px,stroke-dasharray:4 4;
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-3">
+              <p class="mod-label text-slate-500 mb-2">After · 单一 pending + 壳 adapter 独立</p>
+              <pre class="mermaid">
+flowchart LR
+  N[notify.ts] -->|"requestOpenSession(id, ts)"| A["appState.ts<br/>pendingSessionId(带时间戳)"]
+  A --> C[ChatPanel.vue]
+  S[stores/shell.ts<br/>壳 adapter] ---|独立 module| A
+              </pre>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>问题</strong>：appState.ts 一个文件装了五类不相关概念；两段命名几乎相同的 pending 状态语义各半，是一处真实的理解陷阱。</p>
+          <p class="text-sm"><strong>方案</strong>：壳 adapter 抽为 stores/shell.ts；通知链路合并为单一 pending（带时间戳），TTL 判定只存在一份。</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>两段 TTL/消费逻辑合一</li>
+            <li>状态文件只剩状态</li>
+            <li>理解「点通知回到会话」不用跳三处</li>
+          </ul>
+          <p class="text-xs text-slate-500">与 ADR 无冲突。api/index.ts 桶文件同为浅 module，但属前端惯例，不动。</p>
+        </article>
+
+      </section>
+
+      <section id="top-recommendation" class="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-6 space-y-3">
+        <h2 class="text-xl font-serif">首选：<a href="#c1" class="underline decoration-emerald-400">候选 1 · 主图回合深 module</a></h2>
+        <p class="text-sm text-slate-700">它消掉四处复制、解锁「不摸 LangGraph 细节的测试」，并且是候选 4（会话生命周期收口）的天然落点——回合 module 一旦存在，快照缓存和建删会话都有了 owner。候选 2 的键收口是纯 dedup，可以顺手同批做掉；候选 3 紧随其后。</p>
+      </section>
+
+    </main>
+  </body>
+</html>

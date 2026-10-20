@@ -127,6 +127,62 @@ def test_waitsForNextAtAndDayCap(dataDir, dbFile, monkeypatch):
     assert calls == []
 
 
+def test_devSkipKindsBypassesGraceAndNextAt(dataDir, dbFile, monkeypatch):
+    """开发自测豁免：启动缓冲未过、nextAt 在未来，传 DEV_SKIP_KINDS 仍开口。"""
+    with database.getDb() as db:
+        _configure(db)
+        _setState(
+                db,
+                day=_at(12, 0).strftime("%Y-%m-%d"),
+                nextAt=(_at(12, 0) + timedelta(hours=2)).isoformat(timespec="seconds"),
+                dayCount=0,
+                missed=0,
+            )
+    calls = _ready(monkeypatch)
+    monkeypatch.setattr(companion, "_processStartedAt", _at(12, 0) - timedelta(minutes=1))
+    result = companion.patrol(_at(12, 0), skipKinds=companion.DEV_SKIP_KINDS)
+    assert result["opened"] is True
+    assert calls
+
+
+def test_graceOnlyStillWaitsForNextAt(dataDir, dbFile, monkeypatch):
+    """只豁免启动缓冲：未到点仍拦下，具名豁免互不连带。"""
+    with database.getDb() as db:
+        _configure(db)
+        _setState(
+                db,
+                day=_at(12, 0).strftime("%Y-%m-%d"),
+                nextAt=(_at(12, 0) + timedelta(hours=2)).isoformat(timespec="seconds"),
+                dayCount=0,
+                missed=0,
+            )
+    calls = _ready(monkeypatch)
+    monkeypatch.setattr(companion, "_processStartedAt", _at(12, 0) - timedelta(minutes=1))
+    result = companion.patrol(_at(12, 0), skipKinds={"grace"})
+    assert result["opened"] is False
+    assert result["reason"] == "未到点"
+    assert calls == []
+
+
+def test_nextAtOnlyStillRespectsStartupGrace(dataDir, dbFile, monkeypatch):
+    """只豁免未到点：启动缓冲仍拦下（信号触发走的就是这条组合）。"""
+    with database.getDb() as db:
+        _configure(db)
+        _setState(
+                db,
+                day=_at(12, 0).strftime("%Y-%m-%d"),
+                nextAt=_at(12, 0).isoformat(timespec="seconds"),
+                dayCount=0,
+                missed=0,
+            )
+    calls = _ready(monkeypatch)
+    monkeypatch.setattr(companion, "_processStartedAt", _at(12, 0) - timedelta(minutes=1))
+    result = companion.patrol(_at(12, 0), skipKinds={"nextAt"})
+    assert result["opened"] is False
+    assert result["reason"] == "启动缓冲"
+    assert calls == []
+
+
 def test_missedStreakStopsTodayAndRecoversTomorrow(dataDir, dbFile, monkeypatch):
     """连续 3 次未回 → 当日停止；次日恢复（表四）。"""
     today = _at(12, 0).strftime("%Y-%m-%d")

@@ -9,9 +9,11 @@ import helpers
 from helpers import FakeToolModel, parseSseEvents
 
 from down_note import config
+from down_note.agent import context
 from down_note.agent import llm as agentLlm
 from down_note.agent import mainAgent
 from down_note.agent.checkpointer import getCheckpointer
+from down_note.agent.session import dropSession
 from down_note.app import createApp
 from down_note.db import database, models
 
@@ -70,3 +72,20 @@ def test_historyEmptyAfterDelete(dataDir, dbFile, monkeypatch):
     assert local.get(f"/api/chat/history?sessionId={sessionId}").json()
     assert local.delete(f"/api/chat/sessions/{sessionId}").status_code == 204
     assert local.get(f"/api/chat/history?sessionId={sessionId}").json() == []
+
+
+def test_dropSessionClearsPromptBlocksAndIsIdempotent(dataDir, dbFile, monkeypatch):
+    """dropSession 是删除的唯一入口：提示词快照一并失效，重复调用无副作用。"""
+    with database.getDb() as db:
+        _configure(db)
+    local = TestClient(createApp())
+    sessionId = _wakeSession(local, monkeypatch)
+    assert sessionId in context._promptBlocks
+
+    dropSession(sessionId)
+    dropSession(sessionId)
+
+    assert sessionId not in context._promptBlocks
+    with database.getDb() as db:
+        assert models.listMessages(db, sessionId) == []
+        assert models.getSessionById(db, sessionId) is None

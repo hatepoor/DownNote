@@ -52,6 +52,20 @@ def getEntry(db: Session, entryId: int) -> Entry | None:
     return db.get(Entry, entryId)
 
 
+def loadEntryWithMood(db: Session, entryId: int) -> Entry | None:
+    """单条读取并把 mood 一并加载——调用方不必再操心懒加载的会话边界。
+
+    populate_existing：即使身份映射里已有该条目，也以库为准刷新属性与关系——
+    改正文后 clearMood 刚删掉旧心情记录，必须读到 None 而不是缓存里的旧对象。
+    """
+    return db.execute(
+            select(Entry)
+            .options(joinedload(Entry.mood))
+            .where(Entry.id == entryId)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
+
 def listEntriesWithMood(db: Session, limit: int, offset: int) -> list[Entry]:
     return list(
             db.execute(

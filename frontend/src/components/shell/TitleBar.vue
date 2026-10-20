@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 应用自绘标题栏：Tauri 壳与开发态无边框窗口都渲染（浏览器里由浏览器自己接管）。
-// 窗口动作经 appState.windowAction 分发，两条壳的按钮语义一致。
-import { windowAction } from '../../stores/appState'
+// 窗口动作经 stores/shell 分发，两条壳的按钮语义一致。
+import { windowAction } from '../../stores/shell'
 </script>
 
 <template>
