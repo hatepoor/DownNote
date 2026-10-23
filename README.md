@@ -4,7 +4,7 @@
   <p><strong>一本会陪你说话的日记 · 开源 · 本地运行 · 无账号</strong></p>
   <p>
     <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
-    <img src="https://img.shields.io/badge/version-0.3.0-orange" alt="v0.3.0">
+    <img src="https://img.shields.io/badge/version-0.3.1-orange" alt="v0.3.1">
     <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python 3.12">
     <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey" alt="Windows">
   </p>
@@ -24,7 +24,7 @@
 
 而是一个 agent——一个接纳你所有低落情绪的 agent。你的情绪，它都读得到；在你低落的时候，陪你说说话。
 
-## 功能一览（v0.3.0）
+## 功能一览（v0.3.1）
 
 - **日记回应**（新）：写完一条日记，它会在下面留一两句——像朋友在朋友圈下认真评论那样；点「聊聊」可以带着这句话跳进会话接着聊；独立开关、默认开启
 - **信号触发**（新）：连续两天低落、或情绪强度突然升高时，它不再等频率轮到，而是带着对你这几天的了解提前开口；时间窗、当日上限、让路、未回退避一律照旧遵守
@@ -44,7 +44,7 @@
 
 ## 下载使用
 
-1. 从 [Releases](../../releases) 下载安装包（如 `DownNote_0.3.0_x64-setup.exe`），双击运行安装向导——选择安装位置、可选桌面快捷方式；不需要安装 Python 或 Node。从旧版本升级直接覆盖安装，日记与配置保留
+1. 从 [Releases](../../releases) 下载安装包（如 `DownNote_0.3.1_x64-setup.exe`），双击运行安装向导——选择安装位置、可选桌面快捷方式；不需要安装 Python 或 Node。从旧版本升级直接覆盖安装，日记与配置保留
 2. 安装完成自动启动，首次启动自动建库
 3. 点左侧栏「设置」——**模型**页配置模型（保存即生效）；**陪伴**页可开主动陪伴、选档位，也可单独关掉「日记回应」；**人格**页可自定义它的说话风格
 
@@ -82,12 +82,12 @@ git clone https://github.com/hatepoor/DownNote.git
 cd down_note
 uv sync                                  # 后端依赖
 cd frontend && npm install && cd ..      # 前端依赖
-uv run pytest                            # 跑测试（149 个）
+uv run pytest                            # 跑测试（161 个）
 uv run python -m down_note.main          # 启动桌面应用
 ```
 
 - 开发模式：`cd frontend && npm run dev`，应用窗口/浏览器会自动走 Vite 热更新
-- 打包发布：`uv run python scripts/build.py` → 前端构建 → 后端 sidecar（PyInstaller）→ Tauri NSIS 安装包，产物为 `dist/DownNote_0.3.0_x64-setup.exe`
+- 打包发布：`uv run python scripts/build.py` → 前端构建 → 后端 sidecar（PyInstaller）→ Tauri NSIS 安装包，产物为 `dist/DownNote_0.3.1_x64-setup.exe`
 
 ## 目录结构
 
