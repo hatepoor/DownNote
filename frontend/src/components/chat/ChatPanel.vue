@@ -153,7 +153,9 @@ watch(pendingSession, (pending) => {
 
 async function openFromNotification(id: string): Promise<void> {
   try {
-    if (id !== sessionId.value) await loadSession(id)
+    // 同会话也要重载：「聊聊」可能刚往这里追加了一条，不重载界面就没反应。
+    // 正在流式时不动，避免清掉 streamingText——新消息由事件通道补上。
+    if (id !== sessionId.value || !streaming.value) await loadSession(id)
   } catch {
     // 目标会话可能已被删除：忽略即可（界面收口由 onSessionDeleted 负责）
   } finally {

@@ -13,12 +13,17 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
+from langchain_core.messages import AIMessage
 from pydantic import BaseModel, Field
 
 from down_note import config
+from down_note.agent import mainAgent
+from down_note.agent.checkpointer import getCheckpointer
+from down_note.agent.context import refreshSystemPrompt
+from down_note.agent.tools import getCurrentTime
 from down_note.core import analysis
 from down_note.core import pipeline
-from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker, sseFrame
+from down_note.core.events import ENTRY_EVENTS_CHANNEL, broker, sseFrame, turnLock
 from down_note.db import database, models
 
 router = APIRouter(prefix="/api", tags=["entries"])
@@ -250,6 +255,35 @@ def getEntryMood(entryId: int) -> MoodRead:
     return moodToRead(mood)
 
 
+def _ensureReplyInGraph(cfg, sessionId: str, replyText: str, replyId: int) -> None:
+    """把「聊聊」转移的留言注入主图状态，模型下一轮才真的看得见它。
+
+    只写 messages 表不够：主图上下文来自 checkpointer，不注入会出现「界面上有、
+    模型不知道」的分裂（用户点完聊聊问「你摸到什么」，模型一脸茫然）。
+    与回顾结果回流同一条路径（回合闸门内 update_state）；消息 id 用回应编号，
+    重复点击或旧数据都能在这里幂等补齐。
+    """
+    if not cfg.isConfigured():
+        return
+    messageKey = f"entry-reply-{replyId}"
+    graphConfig = {"configurable": {"thread_id": sessionId}}
+    with turnLock(sessionId):
+        graph = mainAgent.buildMainAgent(cfg, getCheckpointer(), sessionId)
+        refreshSystemPrompt(graph, sessionId, getCurrentTime.invoke({}))
+        state = graph.get_state(graphConfig)
+        existingIds = {
+                message.id
+                for message in (state.values.get("messages") or [])
+                if getattr(message, "id", None)
+            }
+        if messageKey in existingIds:
+            return
+        graph.update_state(
+                graphConfig,
+                {"messages": [AIMessage(content=replyText, id=messageKey)]},
+            )
+
+
 @router.post("/entries/{entryId}/reply/chat")
 def chatAboutReply(entryId: int) -> ReplyRead:
     """「聊聊」：把回应原文零模型调用地追加进最近活跃会话；幂等。
@@ -257,27 +291,37 @@ def chatAboutReply(entryId: int) -> ReplyRead:
     幂等分支校验目标会话仍存在——会话被物理删除后 session_message_id 不会清空，
     不校验会把用户带到已消失的空会话；会话没了就当作未转移、重新落库。
     """
+    newlyTransferred = False
     with database.getDb() as db:
         reply = models.getReplyByEntry(db, entryId)
         if reply is None:
             raise HTTPException(status_code=404, detail="该条目还没有回应")
+        cfg = config.getModelServiceConfig(db)
+        replyText = reply.reply_text
+        replyId = reply.id
         if (
                 reply.session_message_id is not None
                 and reply.session_id is not None
                 and models.getSessionById(db, reply.session_id) is not None
             ):
-            return replyToRead(reply)  # 已转移且会话仍在：直接回现状，不重复落库
-        sessions = models.listRecentSessions(db, limit=1)
-        sessionId = sessions[0].session_id if sessions else uuid.uuid4().hex
-        createdAt = _nowIso()
-        if not sessions:
-            models.upsertChatSession(db, sessionId, createdAt)
-        messageId = models.addMessage(db, sessionId, "assistant", reply.reply_text, createdAt)
-        models.upsertChatSession(db, sessionId, createdAt)  # 刷新最近活跃
-        models.markReplyTransferred(db, reply.id, sessionId, messageId)
-        result = replyToRead(models.getReplyByEntry(db, entryId))
-    broker.publish(sessionId, {"type": "message", "message": {
-            "role": "assistant", "content": reply.reply_text, "createdAt": createdAt}})
+            sessionId = reply.session_id
+            result = replyToRead(reply)  # 已转移且会话仍在：直接回现状，不重复落库
+        else:
+            sessions = models.listRecentSessions(db, limit=1)
+            sessionId = sessions[0].session_id if sessions else uuid.uuid4().hex
+            createdAt = _nowIso()
+            if not sessions:
+                models.upsertChatSession(db, sessionId, createdAt)
+            messageId = models.addMessage(db, sessionId, "assistant", replyText, createdAt)
+            models.upsertChatSession(db, sessionId, createdAt)  # 刷新最近活跃
+            models.markReplyTransferred(db, replyId, sessionId, messageId)
+            result = replyToRead(models.getReplyByEntry(db, entryId))
+            newlyTransferred = True
+
+    _ensureReplyInGraph(cfg, sessionId, replyText, replyId)
+    if newlyTransferred:
+        broker.publish(sessionId, {"type": "message", "message": {
+                "role": "assistant", "content": replyText, "createdAt": createdAt}})
     return result
 
 

@@ -45,6 +45,28 @@ def _wake(local: TestClient) -> str:
         return parseSseEvents(res.iter_lines())[0]["sessionId"]
 
 
+def test_defaultPersonaSwitchesOnEmotion():
+    """默认人格先分「气 / 难过」：吐槽只接不满，难过有独立接法（2026-10-20 修订）。
+
+    这条守的是产品行为：用户低落时继续吐槽 = 把感受推回去，提示词里必须有明确分型。
+    """
+    from down_note.agent.prompts.companion import DEFAULT_PERSONA
+
+    assert "是在「气」还是在「难过」" in DEFAULT_PERSONA
+    assert "吐槽只用来接「不满」" in DEFAULT_PERSONA
+    assert "难过时的接法" in DEFAULT_PERSONA
+    assert "每一条消息重新判断" in DEFAULT_PERSONA
+    # 实机反馈补的第二层：求助必须给实在东西，禁咨询师套话与编造经历
+    assert "明确求助" in DEFAULT_PERSONA
+    assert "我在这儿听着" in DEFAULT_PERSONA
+    assert "别复述心情摘要" in DEFAULT_PERSONA or "别原样复述" in DEFAULT_PERSONA
+    assert "不编经历、不说套话" in DEFAULT_PERSONA
+    # 分型必须排在吐槽规则之前：先判断，再决定怎么回
+    assert DEFAULT_PERSONA.index("是在「气」还是在「难过」") < DEFAULT_PERSONA.index(
+            "站到他这边一起吐槽"
+        )
+
+
 def _systemText(sessionId: str) -> str:
     """直接读图状态里的系统消息（不经建图，避免额外消耗模型池）。"""
     checkpoint = getCheckpointer().get_tuple({"configurable": {"thread_id": sessionId}})

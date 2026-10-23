@@ -55,6 +55,37 @@ def test_chat_transfer_404(client):
     assert client.post(f"/api/entries/{entryId}/reply/chat").status_code == 404
 
 
+def test_chat_transfer_injectsIntoGraph(client):
+    """转移的留言必须进主图状态：只写 messages 表会出现「界面有、模型不知道」。
+
+    用户点完「聊聊」随后问「你摸到什么」，模型却看不见那条留言——即本用例守的回归。
+    """
+    from langchain_core.messages import AIMessage
+
+    from down_note.agent.checkpointer import getCheckpointer
+
+    entryId = _seed()
+    with database.getDb() as db:
+        models.setSetting(db, "base_url", "http://model.local/v1")
+        models.setSetting(db, "model_name", "test-model")
+
+    first = client.post(f"/api/entries/{entryId}/reply/chat").json()
+    graphConfig = {"configurable": {"thread_id": first["sessionId"]}}
+
+    def _injectedMessages():
+        checkpoint = getCheckpointer().get_tuple(graphConfig)
+        return [
+                message
+                for message in checkpoint.checkpoint["channel_values"]["messages"]
+                if isinstance(message, AIMessage) and message.content == "撑不住就先靠一下。"
+            ]
+
+    assert len(_injectedMessages()) == 1  # 进图了，下一轮模型看得见
+
+    client.post(f"/api/entries/{entryId}/reply/chat")  # 幂等重复点击
+    assert len(_injectedMessages()) == 1  # 图里不重复注入
+
+
 def test_list_and_day_detail_carry_reply(client):
     """列表与某一天页面都要装配回应——日页曾漏传 db，导致历史日的回应卡片永不显示。"""
     _seed()
